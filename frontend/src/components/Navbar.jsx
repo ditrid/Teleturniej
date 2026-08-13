@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import API_URL from "../config";
 import logoUrl from "/images/kwakout_logo_napis.png";
 
 const NAV_LINKS = [
@@ -129,7 +130,7 @@ export default function Navbar() {
               </>
             ) : (
               <a
-                href="/auth/google"
+                href={`${API_URL}/auth/google`}
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-night-800/80 px-4 py-2 text-sm font-bold text-white transition hover:border-white/25 hover:bg-night-700"
               >
                 <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">

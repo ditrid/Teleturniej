@@ -20,7 +20,34 @@ const {
 } = require("./auth");
 
 const app = express();
-app.use(cors());
+
+// Dozwolone originy dla CORS (frontend). Pusta lista = tryb permissive
+// (zezwól na wszystko — jak domyślny cors()). Gdy ustawisz CORS_ORIGINS,
+// backend dopuszcza wyłącznie wymienione originy (oddzielone przecinkiem).
+// Uwaga: nie używamy tu FRONTEND_URL, bo ten adres służy tylko do przekierowań
+// OAuth — a frontend może być serwowany także przez sam backend (same-origin).
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+  // Brak nagłówka Origin (ten sam origin / proxy / curl) — zezwól.
+  if (!origin) return true;
+  // Brak jawnej listy dozwolonych lub "*" — tryb permissive.
+  if (CORS_ORIGINS.length === 0) return true;
+  return CORS_ORIGINS.includes("*") || CORS_ORIGINS.includes(origin);
+};
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (isOriginAllowed(origin)) return callback(null, true);
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 app.use(express.json());
 app.use(passport.initialize());
@@ -28,8 +55,12 @@ app.use(passport.initialize());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin(origin, callback) {
+      if (isOriginAllowed(origin)) return callback(null, true);
+      return callback(new Error("Origin not allowed by CORS"));
+    },
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
@@ -59,7 +90,7 @@ app.get(
     const token = signToken(req.user);
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       secure: process.env.NODE_ENV === "production",
       maxAge: TOKEN_MAX_AGE_MS,
       path: "/",

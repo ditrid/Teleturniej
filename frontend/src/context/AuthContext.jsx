@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import API_URL from "../config";
 
 const AuthContext = createContext(null);
 
@@ -8,7 +9,7 @@ export function AuthProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/me");
+      const res = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
       const data = res.ok ? await res.json() : { user: null };
       setUser(data.user || null);
     } catch {
@@ -24,7 +25,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch(`${API_URL}/api/auth/logout`, { method: "POST", credentials: "include" });
     } catch {
       // ignoruj błędy sieci — i tak czyścimy stan lokalny
     } finally {
