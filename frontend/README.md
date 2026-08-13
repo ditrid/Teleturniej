@@ -1,16 +1,54 @@
-# React + Vite
+# KwakOut — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Gry mobilne na imprezy: quizy, muzyka, memy i wyzwania. Jeden kod PIN i cała ekipa gra razem na telefonach.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **React 19** + **Vite 8**
+- **Tailwind CSS v4** (`@tailwindcss/vite`) — design tokens w `src/index.css` (`@theme`)
+- **react-router-dom v7**
+- **socket.io-client** — komunikacja z serwerem gry (`/socket.io` proxowany na `localhost:5000`)
+- **qrcode** — generowanie QR w panelu prowadzącego
+- **oxlint** — lint
 
-## React Compiler
+## Komendy
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install      # instaluje zależności
+npm run dev      # serwer deweloperski (host: true, dostęp z LAN)
+npm run build    # build produkcyjny do dist/
+npm run preview  # podgląd zbudowanej aplikacji
+npm run lint     # oxlint
+```
 
-## Expanding the Oxlint configuration
+## Struktura
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```
+src/
+├── App.jsx                 # routing (Layout + strony funkcyjne)
+├── main.jsx                # entry point
+├── index.css               # Tailwind v4: @theme (kolory night/gold, fonty), base, utilities
+├── components/             # Navbar, Hero, GameCard, Leaderboard, QuickCodeModal, Footer itd.
+├── context/                # SocketContext (gra), QuickCodeContext (modal PIN)
+├── data/                   # mock data: games, leaderboard, challenges, shop
+├── pages/                  # Home, Games, Challenges, Rankings, Shop, HowItWorks, Join, Host
+└── styles/                 # legacy CSS stron funkcyjnych (Join/Host): theme, player, host
+```
+
+## Routing
+
+| Ścieżka           | Strona                        |
+| ----------------- | ----------------------------- |
+| `/`               | Strona główna (landing)       |
+| `/gry`            | Biblioteka gier               |
+| `/wyzwania`       | Wyzwania                      |
+| `/rankingi`       | Rankingi                      |
+| `/sklep`          | Sklep (monety, kosmetyki)     |
+| `/jak-to-dziala`  | Jak to działa? + FAQ          |
+| `/join`           | Dołącz do gry (gracz)         |
+| `/host`           | Panel prowadzącego (host)     |
+
+## Design
+
+Ciemny motyw „night" (grafity) z akcentem złotym (Tailwind tokens: `night-*`, `gold-*`, `cyan-*`). Fonty: **Outfit** (display) + **Inter** (body). Strony marketingowe używają wspólnego layoutu (`Navbar` + `Footer` + `QuickCodeModal`); `Join`/`Host` są pełnoekranowe z własnym, legacy CSS opartym o zmienne z `theme.css`.
+

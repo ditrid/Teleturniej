@@ -13,7 +13,7 @@
 .host-title {
   font-size: 3rem;
   color: var(--accent-gold);
-  text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+  text-shadow: 0 0 20px rgba(255, 212, 0, 0.5);
   margin-bottom: 10px;
   letter-spacing: 2px;
 }
@@ -140,11 +140,11 @@
 
 .btn-start:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(74, 14, 143, 0.5);
+  box-shadow: 0 8px 25px rgba(0, 184, 58, 0.5);
 }
 
 .btn-next {
-  background: linear-gradient(135deg, var(--accent-gold), #b8960f);
+  background: linear-gradient(135deg, var(--accent-gold), #ff8a00);
   color: var(--bg-dark);
   font-size: 1.2rem;
   padding: 16px 50px;
@@ -154,7 +154,7 @@
 
 .btn-next:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(212, 175, 55, 0.4);
+  box-shadow: 0 8px 25px rgba(255, 212, 0, 0.4);
 }
 
 .btn-finale {
@@ -301,4 +301,105 @@
 .elimination-content p {
   font-size: 1.3rem;
   margin-bottom: 20px;
+}
+
+/* ===== PRAWDA CZY WYZWANIE — host ===== */
+
+.prawda-host {
+  margin-top: 10px;
+}
+
+.game-type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 220px;
+  padding: 24px 16px;
+  background: var(--bg-panel);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  color: var(--text-primary);
+}
+
+.game-type-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-gold);
+}
+
+.game-type-card.selected {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 20px rgba(255, 212, 0, 0.35);
+  background: rgba(255, 212, 0, 0.06);
+}
+
+.game-type-emoji {
+  font-size: 2.6rem;
+}
+
+.game-type-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.game-type-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.settings-panel {
+  max-width: 520px;
+  margin: 0 auto 24px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  text-align: left;
+}
+
+.settings-panel h3 {
+  color: var(--accent-gold);
+  margin-bottom: 18px;
+  font-size: 1.2rem;
+}
+
+.settings-group {
+  margin-bottom: 18px;
+}
+
+.settings-group label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+.level-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.level-chip {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.level-chip:hover {
+  border-color: var(--accent-gold);
+}
+
+.level-chip.selected {
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: var(--bg-dark);
 }

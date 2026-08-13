@@ -1,2 +1,7 @@
 backend/node_modules/
 frontend/node_modules/
+
+# Środowisko / sekrety
+.env
+.env.*
+!.env.example

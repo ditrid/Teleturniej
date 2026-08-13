@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kwakout-postgres
+    environment:
+      POSTGRES_USER: kwakout
+      POSTGRES_PASSWORD: kwakout
+      POSTGRES_DB: kwakout
+    ports:
+      - "5432:5432"
+    volumes:
+      - kwakout_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kwakout"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis — na późniejszych etapach (skalowanie / adapter Socket.IO).
+  # Odkomentuj, gdy dojdzie do etapu skalowania.
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: kwakout-redis
+  #   ports:
+  #     - "6379:6379"
+
+volumes:
+  kwakout_pgdata:

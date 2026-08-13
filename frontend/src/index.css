@@ -1,87 +1,195 @@
+@import "tailwindcss";
+
+/* ============================================================= */
+/*  KWAKOUT — design tokens (Tailwind CSS v4 theme)               */
+/* ============================================================= */
+@theme {
+  /* Typography */
+  --font-sans: "Roboto", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Outfit", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-roboto: "Roboto", sans-serif;
+
+  /* Base "night" surfaces */
+  --color-night-950: #07080d;
+  --color-night-900: #0d1017;
+  --color-night-850: #121625;
+  --color-night-800: #171c2c;
+  --color-night-700: #232a40;
+  --color-night-600: #333c58;
+
+  /* Accent gold */
+  --color-gold-200: #fff3b0;
+  --color-gold-300: #ffe27a;
+  --color-gold-400: #ffd400;
+  --color-gold-500: #e0bb00;
+  --color-gold-600: #b89700;
+
+  /* Energy cyan */
+  --color-cyan-300: #67e8f9;
+  --color-cyan-400: #22d3ee;
+  --color-cyan-500: #06b6d4;
+
+  /* Feedback */
+  --color-danger-400: #ff6b6b;
+  --color-danger-500: #f43f5e;
+  --color-success-400: #34d399;
+  --color-success-500: #10b981;
+
+  /* Animations */
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-float-slow: float 9s ease-in-out infinite;
+  --animate-glow-pulse: glowPulse 4s ease-in-out infinite;
+  --animate-rise: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-confetti: confetti 3s ease-in-out infinite;
+  --animate-spin-slow: spin 12s linear infinite;
+  --animate-bounce-gentle: bounceGentle 2s ease-in-out infinite;
+  --animate-drift: drift 8s ease-in-out infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50% { transform: translateY(-18px) rotate(2deg); }
+  }
+  @keyframes glowPulse {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 0.95; transform: scale(1.08); }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes confetti {
+    0% { transform: translateY(0) rotate(0deg); opacity: 0.8; }
+    100% { transform: translateY(-400px) rotate(720deg); opacity: 0; }
+  }
+  @keyframes bounceGentle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes drift {
+    0%, 100% { transform: translateX(0) translateY(0); }
+    25% { transform: translateX(8px) translateY(-6px); }
+    50% { transform: translateX(-4px) translateY(4px); }
+    75% { transform: translateX(-8px) translateY(-2px); }
+  }
+}
+
+/* ============================================================= */
+/*  Legacy CSS variables — używane przez strony funkcyjne         */
+/*  (Join / Host / Scoreboard)                                    */
+/* ============================================================= */
 :root {
-  --bg-dark: #0a0a2e;
-  --bg-darker: #06061f;
-  --bg-panel: #0d0d3a;
-  --accent-gold: #d4af37;
-  --accent-gold-light: #f0d060;
-  --accent-purple: #4a0e8f;
-  --accent-purple-light: #6a1fbf;
+  --bg-dark: #111114;
+  --bg-darker: #070708;
+  --bg-panel: #17171b;
+  --accent-gold: #ffd400;
+  --accent-gold-light: #ffe94d;
+  --accent-purple: #00b83a;
+  --accent-purple-light: #35e26b;
   --red-buzzer: #cc0000;
   --red-buzzer-glow: #ff2020;
   --green-correct: #00cc66;
   --red-wrong: #ff3333;
-  --text-primary: #e0e0e0;
-  --text-secondary: #a0a0b0;
+  --text-primary: #f2f0ea;
+  --text-secondary: #a3a19a;
   --text-white: #ffffff;
-  --border-color: #2a2a5a;
-  --answer-bg: #1a1a4e;
-  --answer-hover: #2a2a6e;
-  --correct-bg: #004d26;
+  --border-color: #2b2b31;
+  --answer-bg: #1c1c22;
+  --answer-hover: #27272e;
+  --correct-bg: #003d1f;
   --wrong-bg: #4d0000;
-  --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --font-main: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   --radius: 12px;
   --radius-lg: 20px;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* ============================================================= */
+/*  Base styles (root level — recommended in Tailwind v4)         */
+/* ============================================================= */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--bg-dark);
-  color: var(--text-primary);
-  font-family: var(--font-main);
+  background-color: var(--color-night-950);
+  color: #e7e9f0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
-#root {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  text-align: left;
-  border: none;
-  min-height: 100vh;
-  display: block;
+::selection {
+  background: rgba(255, 212, 0, 0.35);
+  color: #fff;
 }
 
+/* ============================================================= */
+/*  Scrollbar                                                     */
+/* ============================================================= */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-night-950); }
+::-webkit-scrollbar-thumb {
+  background: var(--color-night-600);
+  border-radius: 8px;
+  border: 2px solid var(--color-night-950);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-night-700); }
+
+/* ============================================================= */
+/*  Reusable utilities                                            */
+/* ============================================================= */
+@utility glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+@utility text-gradient-gold {
+  background-image: linear-gradient(100deg, #fff3b0 0%, #ffd400 45%, #ffe27a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ============================================================= */
+/*  Legacy animation helpers (używane przez Join / Host)          */
+/* ============================================================= */
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
 }
-
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 10px rgba(212, 175, 55, 0.3); }
-  50% { box-shadow: 0 0 30px rgba(212, 175, 55, 0.6); }
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 212, 0, 0.3); }
+  50% { box-shadow: 0 0 30px rgba(255, 212, 0, 0.6); }
 }
-
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(40px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes buzzerPulse {
-  0%, 100% { 
+  0%, 100% {
     box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
     transform: scale(1);
   }
-  50% { 
+  50% {
     box-shadow: 0 0 60px rgba(255, 0, 0, 0.8);
     transform: scale(1.03);
   }
 }
-
-.fade-in {
-  animation: fadeIn 0.5s ease-out;
+@keyframes countdown {
+  from { width: 100%; }
+  to { width: 0%; }
 }
 
-.slide-up {
-  animation: slideUp 0.6s ease-out;
-}
+.fade-in { animation: fadeIn 0.5s ease-out; }
+.slide-up { animation: slideUp 0.6s ease-out; }

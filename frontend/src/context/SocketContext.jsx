@@ -2,7 +2,7 @@ import { createContext, useContext } from "react";
 import { io } from "socket.io-client";
 
 // Socket created ONCE at module level – available immediately
-const socket = io("http://localhost:5000");
+const socket = io(); // Auto-connects to the current origin (works with ngrok/localhost/any host)
 console.log("[SocketContext] Socket created, id:", socket.id || "(pending connection)");
 
 const SocketContext = createContext(socket);

@@ -1,0 +1,126 @@
+// KWAKOUT — model danych platformy gier
+// PostgreSQL + Prisma. Stan realtime sesji gier pozostaje w Redis/pamięci (gameManager).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== KONTA I PROFILE =====================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  avatar    String   @default("🦆") // emoji / id skórki
+  coins     Int      @default(0)
+  level     Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts    OAuthAccount[]
+  friendships Friendship[]   @relation("FriendshipsFrom")
+  friendOf    Friendship[]   @relation("FriendshipsTo")
+  rooms       Room[]
+  inventory   Inventory[]
+  orders      Order[]
+  stats       Stat[]
+}
+
+model OAuthAccount {
+  id                String @id @default(uuid())
+  provider          String // "google"
+  providerAccountId String
+  userId            String
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// ===================== ZNAJOMI =====================
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userId    String
+  friendId  String
+  status    String   @default("pending") // pending | accepted
+  createdAt DateTime @default(now())
+
+  user   User @relation("FriendshipsFrom", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendshipsTo", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+}
+
+// ===================== POKOJE =====================
+
+model Room {
+  id           String   @id @default(uuid())
+  ownerId      String
+  gameType     String
+  mode         String   @default("pin") // pin | password
+  pin          String?  @unique // 6 cyfr (tryb publiczny)
+  passwordHash String? // bcrypt (tryb prywatny)
+  visibility   String   @default("public") // public | friends | private
+  status       String   @default("lobby") // lobby | playing | finished
+  settings     Json?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, status])
+}
+
+// ===================== SKLEP I EKONOMIA =====================
+
+model ShopItem {
+  id        String   @id @default(uuid())
+  type      String // avatar | skin | game | bundle
+  name      String
+  price     Int // w monetach
+  gameRef   String? // powiązanie z katalogiem gier (gameType)
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id        String   @id @default(uuid())
+  userId    String
+  itemId    String
+  amount    Int
+  status    String   @default("pending") // pending | paid
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Inventory {
+  userId     String
+  itemId     String
+  equipped   Boolean  @default(false)
+  acquiredAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, itemId])
+}
+
+// ===================== STATYSTYKI / RANKINGI =====================
+
+model Stat {
+  id       String   @id @default(uuid())
+  userId   String
+  gameType String
+  score    Int
+  won      Boolean  @default(false)
+  playedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gameType, score])
+}

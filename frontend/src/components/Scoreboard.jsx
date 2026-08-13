@@ -1,6 +1,6 @@
 import "../styles/theme.css";
 
-export default function Scoreboard({ scores }) {
+export default function Scoreboard({ scores, showLives = true }) {
   if (!scores || scores.length === 0) {
     return null;
   }
@@ -37,12 +37,12 @@ export default function Scoreboard({ scores }) {
               gap: "12px",
               padding: "10px 15px",
               background:
-                index === 0 ? "rgba(212, 175, 55, 0.1)" : "var(--bg-dark)",
+                index === 0 ? "rgba(255, 212, 0, 0.1)" : "var(--bg-dark)",
               borderRadius: "var(--radius)",
               marginBottom: "6px",
               border:
                 index === 0
-                  ? "1px solid rgba(212, 175, 55, 0.3)"
+                  ? "1px solid rgba(255, 212, 0, 0.3)"
                   : "1px solid transparent",
             }}
           >
@@ -81,26 +81,28 @@ export default function Scoreboard({ scores }) {
             >
               {player.name}
             </span>
-            <div
-              style={{
-                display: "flex",
-                gap: "4px",
-                marginRight: "10px",
-              }}
-            >
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  style={{
-                    fontSize: "1.2rem",
-                    opacity: i < player.lives ? 1 : 0.3,
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  ❤️
-                </span>
-              ))}
-            </div>
+            {showLives && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "4px",
+                  marginRight: "10px",
+                }}
+              >
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    style={{
+                      fontSize: "1.2rem",
+                      opacity: i < player.lives ? 1 : 0.3,
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    ❤️
+                  </span>
+                ))}
+              </div>
+            )}
             <span
               style={{
                 fontWeight: "bold",

@@ -115,7 +115,7 @@
 
 .avatar-option.selected {
   border-color: var(--accent-gold);
-  box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+  box-shadow: 0 0 15px rgba(255, 212, 0, 0.5);
 }
 
 .waiting-section {
@@ -349,4 +349,123 @@
 .final-score-points {
   color: var(--accent-gold);
   font-weight: 600;
+}
+
+/* ===== PRAWDA CZY WYZWANIE — gracz ===== */
+
+.my-score-bar {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 12px 20px;
+  text-align: center;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.my-score-bar strong {
+  color: var(--accent-gold);
+  font-size: 1.4rem;
+}
+
+.choice-section {
+  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+}
+
+.choice-section h3 {
+  color: var(--text-secondary);
+  margin-bottom: 18px;
+}
+
+.choice-card {
+  display: block;
+  width: 100%;
+  padding: 22px;
+  margin-bottom: 12px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.choice-card.truth {
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+}
+
+.choice-card.dare {
+  background: linear-gradient(135deg, #dc2626, #f97316);
+}
+
+.choice-card:hover {
+  transform: scale(1.02);
+}
+
+.choice-card:active {
+  transform: scale(0.98);
+}
+
+.skip-button {
+  margin-top: 4px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.skip-button:hover {
+  border-color: var(--red-wrong);
+  color: var(--red-wrong);
+}
+
+.vote-section {
+  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  text-align: center;
+  border: 2px solid var(--accent-gold);
+}
+
+.vote-section h3 {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  font-size: 1.1rem;
+}
+
+.vote-button {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  margin-bottom: 10px;
+  background: var(--bg-dark);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vote-button:hover {
+  border-color: var(--accent-gold);
+  transform: translateX(4px);
+}
+
+.vote-points {
+  color: var(--accent-gold);
+  font-weight: 700;
+  margin-left: 8px;
 }

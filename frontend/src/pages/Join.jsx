@@ -1,24 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSocket } from "../context/SocketContext";
 import { useSearchParams } from "react-router-dom";
+import { VOTE_OPTIONS } from "../data/truthOrDare";
 import "../styles/theme.css";
 import "../styles/player.css";
 
 const AVATARS = ["🦊", "🐸", "🐱", "🐶", "🦄", "🐼", "🐨", "🦁"];
+const BUZZER_TIME = 20;
 
 export default function Join() {
   const socket = useSocket();
   const [searchParams] = useSearchParams();
 
   const codeFromUrl = searchParams.get("code") || "";
-  const [gameCode, setGameCode] = useState(codeFromUrl);
-  const [step, setStep] = useState(codeFromUrl ? "setup" : "code");
-  
-  // DEBUG: log every render to confirm code version
-  console.log("[Join] RENDER v2 | step:", codeFromUrl ? "setup" : "code", "| socket:", !!socket, "| gameCode:", codeFromUrl || "(empty)");
+  const savedPlayerId = localStorage.getItem("playerId");
+  const savedGameCode = localStorage.getItem("gameCode");
+
+  const [gameCode, setGameCode] = useState(codeFromUrl || savedGameCode || "");
+  const [step, setStep] = useState("code");
   const [playerName, setPlayerName] = useState("");
   const [avatar, setAvatar] = useState(AVATARS[0]);
-  const [playerId, setPlayerId] = useState(null);
+  const [playerId, setPlayerId] = useState(savedPlayerId || null);
   const [error, setError] = useState("");
   const [players, setPlayers] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -33,6 +35,16 @@ export default function Join() {
   const [gameOverData, setGameOverData] = useState(null);
   const [eliminated, setEliminated] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [buzzerTimeLeft, setBuzzerTimeLeft] = useState(0);
+
+  // --- Prawda czy Wyzwanie ---
+  const [gameType, setGameType] = useState("quiz");
+  const [turnInfo, setTurnInfo] = useState(null);
+  const [prompt, setPrompt] = useState(null);
+  const [skipNotice, setSkipNotice] = useState(null);
+  const [voteRequest, setVoteRequest] = useState(null);
+  const [myVote, setMyVote] = useState(null);
+  const [voteResult, setVoteResult] = useState(null);
 
   // Refs to avoid dependency issues in useEffect
   const playerIdRef = useRef(playerId);
@@ -41,13 +53,34 @@ export default function Join() {
   const gameCodeRef = useRef(gameCode);
   gameCodeRef.current = gameCode;
 
-  // Auto-join when code is in URL (from QR code)
+  const buzzerTimerRef = useRef(null);
+
+  // 20-second countdown timer when player has buzzed
   useEffect(() => {
-    if (socket && codeFromUrl && codeFromUrl.length === 6) {
-      console.log("[Join] Auto-joining with code from URL:", codeFromUrl);
-      socket.emit("join-game", { code: codeFromUrl });
+    if (iBuzzed && !answered && !answerResult) {
+      setBuzzerTimeLeft(BUZZER_TIME);
+      const start = Date.now();
+      buzzerTimerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - start) / 1000);
+        const left = BUZZER_TIME - elapsed;
+        setBuzzerTimeLeft(left > 0 ? left : 0);
+        if (left <= 0) {
+          clearInterval(buzzerTimerRef.current);
+        }
+      }, 200);
+    } else {
+      setBuzzerTimeLeft(0);
+      if (buzzerTimerRef.current) {
+        clearInterval(buzzerTimerRef.current);
+        buzzerTimerRef.current = null;
+      }
     }
-  }, [socket, codeFromUrl]);
+    return () => {
+      if (buzzerTimerRef.current) {
+        clearInterval(buzzerTimerRef.current);
+      }
+    };
+  }, [iBuzzed, answered, answerResult]);
 
   // Track socket connection status
   useEffect(() => {
@@ -73,7 +106,7 @@ export default function Join() {
     };
   }, [socket]);
 
-  // Socket listeners – registered ONCE when socket is ready
+  // Socket listeners + auto-rejoin or auto-join
   useEffect(() => {
     if (!socket) return;
 
@@ -92,21 +125,36 @@ export default function Join() {
     socket.on("player-set", ({ player }) => {
       setPlayerId(player.id);
       setMyLives(player.lives);
+      localStorage.setItem("playerId", player.id);
+      saveGameCode();
       setStep("waiting");
+    });
+
+    socket.on("rejoin-success", ({ player, gameType: gt }) => {
+      setPlayerId(player.id);
+      setMyLives(player.lives);
+      setPlayerName(player.name);
+      setAvatar(player.avatar || AVATARS[0]);
+      if (gt) setGameType(gt);
+      localStorage.setItem("playerId", player.id);
+      saveGameCode();
+      setStep("playing");
+      setError("");
+      console.log("[Join] Rejoin successful, step set to playing for", player.name);
     });
 
     socket.on("player-joined", ({ players: playerList }) => {
       setPlayers(playerList);
     });
 
-    socket.on("game-started", () => {
+    socket.on("game-started", ({ gameType: gt } = {}) => {
       console.log("[Join] game-started received, setting step to playing");
+      if (gt) setGameType(gt);
       setStep("playing");
     });
 
     socket.on("greeting", ({ text }) => {
       console.log("[Join] greeting received:", text);
-      // Fallback: if game-started didn't arrive, greeting should also start the game
       setStep("playing");
     });
 
@@ -169,6 +217,7 @@ export default function Join() {
 
     socket.on("finale-started", () => {
       setMyLives(3);
+      setStep("playing");
     });
 
     socket.on("scores-update", ({ scores: newScores }) => {
@@ -179,11 +228,51 @@ export default function Join() {
       }
     });
 
+    // --- Prawda czy Wyzwanie ---
+    socket.on("turn-update", (info) => {
+      setTurnInfo(info);
+      setPrompt(null);
+      setSkipNotice(null);
+      setVoteRequest(null);
+      setMyVote(null);
+      setVoteResult(null);
+    });
+
+    socket.on("prompt", (p) => {
+      setPrompt(p);
+    });
+
+    socket.on("skip-result", ({ playerName }) => {
+      setSkipNotice({ playerName });
+    });
+
+    socket.on("vote-request", (req) => {
+      setVoteRequest(req);
+      setMyVote(null);
+      setVoteResult(null);
+    });
+
+    socket.on("vote-result", (result) => {
+      setVoteResult(result);
+      setVoteRequest(null);
+    });
+
+    // Auto-rejoin if we have saved playerId + gameCode
+    if (savedPlayerId && savedGameCode && savedGameCode.length === 6) {
+      console.log("[Join] Auto-rejoining with playerId:", savedPlayerId, "| code:", savedGameCode);
+      setGameCode(savedGameCode);
+      socket.emit("rejoin-game", { code: savedGameCode, playerId: savedPlayerId });
+    } else if (codeFromUrl && codeFromUrl.length === 6) {
+      console.log("[Join] Auto-joining with code from URL:", codeFromUrl);
+      socket.emit("join-game", { code: codeFromUrl });
+    }
+
     return () => {
       console.log("[Join] Unregistering socket listeners");
       socket.off("join-error");
       socket.off("join-success");
       socket.off("player-set");
+      socket.off("rejoin-success");
       socket.off("player-joined");
       socket.off("game-started");
       socket.off("greeting");
@@ -197,8 +286,17 @@ export default function Join() {
       socket.off("game-over");
       socket.off("finale-started");
       socket.off("scores-update");
+      socket.off("turn-update");
+      socket.off("prompt");
+      socket.off("skip-result");
+      socket.off("vote-request");
+      socket.off("vote-result");
     };
-  }, [socket]); // Only depends on socket!
+  }, [socket]); // Stable – only re-registers when socket changes
+
+  const saveGameCode = () => {
+    localStorage.setItem("gameCode", gameCodeRef.current);
+  };
 
   const joinGame = useCallback(() => {
     if (gameCode.length !== 6) {
@@ -235,6 +333,33 @@ export default function Join() {
       });
     },
     [answered, socket]
+  );
+
+  const chooseAction = useCallback(
+    (choice) => {
+      socket.emit("choose-action", {
+        code: gameCodeRef.current,
+        playerId: playerIdRef.current,
+        choice,
+      });
+    },
+    [socket]
+  );
+
+  const skipTurn = useCallback(() => {
+    socket.emit("skip-turn", { code: gameCodeRef.current });
+  }, [socket]);
+
+  const submitVote = useCallback(
+    (option) => {
+      socket.emit("vote", {
+        code: gameCodeRef.current,
+        playerId: playerIdRef.current,
+        option,
+      });
+      setMyVote(option);
+    },
+    [socket]
   );
 
   const myScore = scores.find((s) => s.id === playerId);
@@ -318,8 +443,8 @@ export default function Join() {
         </div>
       )}
 
-      {/* PLAYING */}
-      {step === "playing" && !eliminated && (
+      {/* PLAYING (quiz) */}
+      {step === "playing" && !eliminated && gameType !== "prawda" && (
         <div className="game-section">
           <div className="lives-display">
             {[0, 1, 2].map((i) => (
@@ -380,9 +505,20 @@ export default function Join() {
                 </p>
               )}
               {iBuzzed && !showAnswers && (
-                <p style={{ color: "var(--accent-gold)", marginTop: "10px" }}>
-                  Oczekiwanie na odpowiedzi...
-                </p>
+                <div style={{ marginTop: "10px" }}>
+                  <p style={{ color: "var(--accent-gold)" }}>
+                    Oczekiwanie na odpowiedzi...
+                  </p>
+                  {buzzerTimeLeft > 0 && (
+                    <p style={{ 
+                      color: buzzerTimeLeft <= 5 ? "var(--red-wrong)" : "var(--text-secondary)", 
+                      fontSize: "1.1rem", 
+                      marginTop: "5px" 
+                    }}>
+                      ⏱️ Czas: {buzzerTimeLeft}s
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -390,6 +526,16 @@ export default function Join() {
           {showAnswers && iBuzzed && !answered && (
             <div className="answers-section fade-in">
               <h3 className="answers-title">Wybierz odpowiedź:</h3>
+              {buzzerTimeLeft > 0 && (
+                <p style={{ 
+                  color: buzzerTimeLeft <= 5 ? "var(--red-wrong)" : "var(--accent-gold)", 
+                  textAlign: "center", 
+                  marginBottom: "10px",
+                  fontSize: "1.1rem"
+                }}>
+                  ⏱️ Czas do końca: {buzzerTimeLeft}s
+                </p>
+              )}
               {answers.map((answer, i) => (
                 <button
                   key={i}
@@ -412,7 +558,7 @@ export default function Join() {
                 answerResult.correct ? (
                   <p>✅ Poprawna odpowiedź! +10 punktów!</p>
                 ) : (
-                  <p>❌ Błędna odpowiedź! -1 życie!</p>
+                  <p>❌ Błędna odpowiedź! {answerResult.timedOut ? "Czas minął! " : ""}-1 życie!</p>
                 )
               ) : (
                 <p>
@@ -420,6 +566,143 @@ export default function Join() {
                   {answerResult.correct ? "poprawnie" : "błędnie"}!
                 </p>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PLAYING (prawda) */}
+      {step === "playing" && gameType === "prawda" && !gameOverData && (
+        <div className="game-section">
+          <div className="my-score-bar">
+            Moje punkty: <strong>{myScorePoints}</strong>
+          </div>
+
+          {turnInfo && (
+            <div className="turn-banner">
+              <span className="turn-label">Kolej:</span>
+              <span className="turn-name">
+                {turnInfo.playerId === playerId ? "Ty" : turnInfo.playerName}
+              </span>
+            </div>
+          )}
+
+          {turnInfo &&
+            turnInfo.playerId === playerId &&
+            !prompt &&
+            !skipNotice && (
+              <div className="choice-section fade-in">
+                <h3>Wybierz kartę:</h3>
+                <button
+                  className="choice-card truth"
+                  onClick={() => chooseAction("truth")}
+                >
+                  🟣 PRAWDA
+                </button>
+                <button
+                  className="choice-card dare"
+                  onClick={() => chooseAction("dare")}
+                >
+                  🔥 WYZWANIE
+                </button>
+                <button className="skip-button" onClick={skipTurn}>
+                  😬 Spasuj
+                </button>
+              </div>
+            )}
+
+          {turnInfo &&
+            turnInfo.playerId !== playerId &&
+            !prompt &&
+            !voteRequest &&
+            !voteResult &&
+            !skipNotice && (
+              <div className="waiting-section">
+                <p className="waiting-title">Kolej {turnInfo.playerName}…</p>
+                <p className="waiting-dots">•••</p>
+              </div>
+            )}
+
+          {skipNotice && (
+            <div className="waiting-section">
+              <p className="waiting-title">
+                😬 {skipNotice.playerName} spasował!
+              </p>
+            </div>
+          )}
+
+          {prompt && (
+            <div
+              className={`prompt-card ${
+                prompt.type === "truth" ? "truth" : "dare"
+              }`}
+            >
+              <div className="prompt-badge">
+                {prompt.type === "truth" ? "🟣 PRAWDA" : "🔥 WYZWANIE"}
+              </div>
+              <p className="prompt-text">{prompt.text}</p>
+              <p className="prompt-player">
+                {prompt.playerId === playerId
+                  ? "To Ty!"
+                  : `Dla: ${prompt.playerName}`}
+              </p>
+            </div>
+          )}
+
+          {voteRequest &&
+            voteRequest.voters.includes(playerId) &&
+            !myVote &&
+            !voteResult && (
+              <div className="vote-section fade-in">
+                <h3>Oceń {voteRequest.playerName}:</h3>
+                {VOTE_OPTIONS.map((o) => (
+                  <button
+                    key={o.key}
+                    className="vote-button"
+                    onClick={() => submitVote(o.key)}
+                  >
+                    {o.emoji} {o.label}{" "}
+                    <span className="vote-points">+{o.points}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+          {voteRequest &&
+            !voteRequest.voters.includes(playerId) &&
+            !voteResult && (
+              <div className="waiting-section">
+                <p className="waiting-title">
+                  Grupa ocenia Twoje wykonanie…
+                </p>
+                <p className="waiting-dots">•••</p>
+              </div>
+            )}
+
+          {myVote && !voteResult && (
+            <div className="waiting-section">
+              <p className="waiting-title">Zagłosowano! Czekam na wynik…</p>
+            </div>
+          )}
+
+          {voteResult && (
+            <div className="vote-result-panel fade-in">
+              <p className="vote-result-title">
+                {voteResult.playerId === playerId
+                  ? `Zdobywasz ${voteResult.pointsAwarded} pkt!`
+                  : `${voteResult.playerName}: +${voteResult.pointsAwarded} pkt`}
+              </p>
+              <div className="vote-breakdown">
+                {VOTE_OPTIONS.map((o) => {
+                  const count = voteResult.breakdown[o.key] || 0;
+                  if (count === 0) return null;
+                  return (
+                    <span key={o.key} className="vote-chip">
+                      {o.emoji} {o.label}: {count}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
