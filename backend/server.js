@@ -31,6 +31,17 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
+// ===== DIAGNOSTYKA CORS (tymczasowa) =====
+console.log(
+  "[CORS-DIAG] START process.env.CORS_ORIGINS =",
+  JSON.stringify(process.env.CORS_ORIGINS || "(puste)")
+);
+console.log(
+  "[CORS-DIAG] START process.env.FRONTEND_URL =",
+  JSON.stringify(process.env.FRONTEND_URL || "(puste)")
+);
+console.log("[CORS-DIAG] START dozwolone originy =", JSON.stringify(CORS_ORIGINS));
+
 const isOriginAllowed = (origin) => {
   // Brak nagłówka Origin (ten sam origin / proxy / curl) — zezwól.
   if (!origin) return true;
@@ -39,10 +50,22 @@ const isOriginAllowed = (origin) => {
   return CORS_ORIGINS.includes("*") || CORS_ORIGINS.includes(origin);
 };
 
+// Tymczasowy middleware logujący origin każdego requestu HTTP.
+app.use((req, res, next) => {
+  console.log(
+    `[CORS-DIAG] HTTP ${req.method} ${req.path} origin=${req.headers.origin || "(brak)"}`
+  );
+  next();
+});
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (isOriginAllowed(origin)) return callback(null, true);
+      const allowed = isOriginAllowed(origin);
+      console.log(
+        `[CORS-DIAG] CORS decyzja origin=${origin || "(brak)"} dozwolony=${allowed}`
+      );
+      if (allowed) return callback(null, true);
       return callback(new Error("Origin not allowed by CORS"));
     },
     credentials: true,
@@ -141,6 +164,11 @@ app.post("/api/auth/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+// Testowy endpoint do weryfikacji CORS (można usunąć po diagnozie).
+app.get("/api/cors-test", (req, res) => {
+  res.json({ ok: true });
+});
+
 // SPA fallback – for any non-static GET request, return index.html
 app.use((req, res, next) => {
   // Skip socket.io and non-GET requests
@@ -160,6 +188,10 @@ app.use((req, res, next) => {
 
 io.on("connection", (socket) => {
   console.log("[SERVER] Nowe połączenie:", socket.id);
+  console.log(
+    "[CORS-DIAG] SOCKET connection origin =",
+    (socket.handshake.headers.origin || "(brak)")
+  );
 
   // Store active answer timeouts per socket
   const answerTimeouts = {};
