@@ -23,14 +23,31 @@ const GAME_META = {
   szalenstwo: { name: "Szaleństwo Pytania", emoji: "🍻", desc: "Szalone pytania" },
   krol: { name: "Król Imprezy", emoji: "👑", desc: "Wyzwania na turę" },
   filmowy: { name: "Filmowy Kwak", emoji: "🎬", desc: "Filmowe scenki" },
+  "flip-cup": { name: "Flip Cup Challenge", emoji: "🥤", desc: "Asystent gry fizycznej" },
+  melodia: { name: "Melodia czy Fałsz", emoji: "🎧", desc: "Zgadnij utwór po tekście" },
+  haslo: { name: "Zgadnij Hasło", emoji: "🔤", desc: "Opisz hasło, grupa zgaduje" },
+  karaoke: { name: "Karaoke Challenge", emoji: "🎤", desc: "Zaśpiewaj, publiczność ocenia" },
 };
 
 // Formatowanie kwot (np. 1 000 000 zł)
 const money = (n) => `${(n || 0).toLocaleString("pl-PL")} zł`;
 
+// Formatowanie czasu (ms) → np. "12.4 s" lub "1:05"
+const formatTime = (ms) => {
+  if (!ms || ms < 0) return "0.0 s";
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  const dec = Math.floor((ms % 1000) / 100);
+  return m > 0 ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}.${dec} s`;
+};
+
 // Gry oparte o turę (kolejność graczy + głosowanie)
 const isTurnGame = (t) =>
-  ["prawda", "szalenstwo", "krol", "filmowy"].includes(t);
+  ["prawda", "szalenstwo", "krol", "filmowy", "karaoke"].includes(t);
+
+// Quizy "wszyscy naraz" (odpowiedzi jednoczesne)
+const isRapidQuiz = (t) => ["quiz-rapid", "melodia"].includes(t);
 
 // Etykiety kart (prompt.type -> wygląd)
 const PROMPT_BADGES = {
@@ -39,6 +56,7 @@ const PROMPT_BADGES = {
   szalenstwo: { emoji: "🍻", label: "SZALEŃSTWO PYTANIA", className: "truth" },
   krol: { emoji: "👑", label: "KRÓL IMPREZY", className: "dare" },
   filmowy: { emoji: "🎬", label: "FILMOWY KWAK", className: "truth" },
+  karaoke: { emoji: "🎤", label: "KARAOKE", className: "dare" },
 };
 
 export default function Host() {
@@ -104,6 +122,15 @@ export default function Host() {
   const [milionerzyProgress, setMilionerzyProgress] = useState(null);
   const [milionerzyResult, setMilionerzyResult] = useState(null);
 
+  // --- Flip Cup Challenge ---
+  const [flipState, setFlipState] = useState(null);
+  const [flipResult, setFlipResult] = useState(null);
+  const [flipNow, setFlipNow] = useState(0);
+
+  // --- Zgadnij Hasło ---
+  const [hasloWord, setHasloWord] = useState(null);
+  const [hasloResult, setHasloResult] = useState(null);
+
   const roundRef = useRef(round);
   roundRef.current = round;
   const googleVoiceRef = useRef(null);
@@ -149,6 +176,19 @@ export default function Host() {
       }
     };
   }, [buzzedPlayer, answerResult]);
+
+  // Licznik czasu rundy Flip Cup
+  useEffect(() => {
+    const startedAt = flipState && flipState.timerStartedAt;
+    if (!startedAt) {
+      setFlipNow(0);
+      return;
+    }
+    const tick = () => setFlipNow(Date.now());
+    tick();
+    const id = setInterval(tick, 200);
+    return () => clearInterval(id);
+  }, [flipState && flipState.timerStartedAt]);
 
   // Load Google Polish voice (best quality on Chrome)
   useEffect(() => {
@@ -400,6 +440,33 @@ export default function Host() {
       setMilionerzyProgress(null);
     });
 
+    // --- Flip Cup Challenge ---
+    socket.on("flip-state", (s) => {
+      setFlipState(s);
+    });
+    socket.on("flip-timer-started", ({ startedAt }) => {
+      setFlipState((prev) =>
+        prev ? { ...prev, timerStartedAt: startedAt } : prev
+      );
+      setFlipResult(null);
+    });
+    socket.on("flip-round-won", (r) => {
+      setFlipResult(r);
+      setFlipState((prev) =>
+        prev ? { ...prev, timerStartedAt: null } : prev
+      );
+    });
+
+    // --- Zgadnij Hasło ---
+    socket.on("haslo-word", (w) => {
+      setHasloWord(w);
+      setHasloResult(null);
+    });
+    socket.on("haslo-result", (r) => {
+      setHasloResult(r);
+      setHasloWord(null);
+    });
+
     return () => {
       socket.off("game-created");
       socket.off("player-joined");
@@ -438,6 +505,11 @@ export default function Host() {
       socket.off("milionerzy-question");
       socket.off("milionerzy-answered");
       socket.off("milionerzy-result");
+      socket.off("flip-state");
+      socket.off("flip-timer-started");
+      socket.off("flip-round-won");
+      socket.off("haslo-word");
+      socket.off("haslo-result");
     };
   }, [socket]);
 
@@ -517,6 +589,25 @@ export default function Host() {
   const milionerzyReveal = () => {
     socket.emit("milionerzy-reveal", { code: gameCode });
   };
+
+  // --- Flip Cup Challenge ---
+  const flipStartTimer = () =>
+    socket.emit("flip-start-timer", { code: gameCode });
+  const flipWinRound = (teamId) =>
+    socket.emit("flip-win-round", { code: gameCode, teamId });
+  const flipNext = () => {
+    setFlipResult(null);
+    socket.emit("flip-next", { code: gameCode });
+  };
+
+  // --- Zgadnij Hasło ---
+  const hasloNext = () => {
+    setHasloResult(null);
+    setHasloWord(null);
+    socket.emit("haslo-next", { code: gameCode });
+  };
+  const hasloGuessed = () => socket.emit("haslo-guessed", { code: gameCode });
+  const hasloSkip = () => socket.emit("haslo-skip", { code: gameCode });
 
   const nextQuestion = () => {
     socket.emit("next-question", { code: gameCode });
@@ -877,8 +968,8 @@ export default function Host() {
         </div>
       )}
 
-      {/* SZYBKI QUIZ — ROZGRYWKA */}
-      {gameType === "quiz-rapid" && gameStatus === "round" && (
+      {/* SZYBKI QUIZ / MELODIA — ROZGRYWKA */}
+      {isRapidQuiz(gameType) && gameStatus === "round" && (
         <div className="prawda-host fade-in">
           <Scoreboard scores={scores} showLives={false} />
 
@@ -1275,6 +1366,163 @@ export default function Host() {
                   Koniec drabinki!
                 </p>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* FLIP CUP CHALLENGE — ROZGRYWKA */}
+      {gameType === "flip-cup" && gameStatus === "round" && flipState && (
+        <div className="prawda-host fade-in">
+          <div style={{ textAlign: "center", marginBottom: "20px" }}>
+            <p className="vote-result-title" style={{ fontSize: "1.7rem" }}>
+              {flipState.teams[0]?.emoji} {flipState.scores.A} :{" "}
+              {flipState.scores.B} {flipState.teams[1]?.emoji}
+            </p>
+            <p style={{ color: "var(--text-secondary)", marginTop: "5px" }}>
+              Gramy do {flipState.targetRounds} rund
+            </p>
+            {flipState.timerStartedAt && (
+              <p
+                style={{
+                  fontSize: "2.2rem",
+                  color: "var(--accent-gold)",
+                  fontWeight: "bold",
+                  marginTop: "8px",
+                }}
+              >
+                ⏱ {formatTime(flipNow - flipState.timerStartedAt)}
+              </p>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "15px",
+            }}
+          >
+            {flipState.teams.map((t) => (
+              <div key={t.id} className="prompt-card" style={{ textAlign: "center" }}>
+                <div className="prompt-badge">
+                  {t.emoji} {t.name}
+                </div>
+                <p className="prompt-player" style={{ marginTop: "8px" }}>
+                  {t.players.join(", ")}
+                </p>
+                <p className="prompt-text" style={{ fontSize: "2rem" }}>
+                  {flipState.scores[t.id]}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="controls-section"
+            style={{ marginTop: "20px", textAlign: "center" }}
+          >
+            {!flipState.timerStartedAt && !flipResult && (
+              <button className="btn btn-start" onClick={flipStartTimer}>
+                ▶ Start rundy
+              </button>
+            )}
+
+            {flipState.timerStartedAt && (
+              <>
+                <p style={{ color: "var(--text-secondary)", marginBottom: "10px" }}>
+                  Która drużyna skończyła pierwsza?
+                </p>
+                <button
+                  className="btn btn-next"
+                  onClick={() => flipWinRound("A")}
+                >
+                  {flipState.teams[0]?.emoji} {flipState.teams[0]?.name} wygrywa
+                </button>{" "}
+                <button
+                  className="btn btn-next"
+                  onClick={() => flipWinRound("B")}
+                >
+                  {flipState.teams[1]?.emoji} {flipState.teams[1]?.name} wygrywa
+                </button>
+              </>
+            )}
+
+            {flipResult && (
+              <div className="vote-result-panel fade-in">
+                <p className="vote-result-title">
+                  {flipResult.winnerEmoji} {flipResult.winnerName} wygrywa rundę!
+                </p>
+                <p style={{ color: "var(--text-secondary)", marginTop: "5px" }}>
+                  Czas: {formatTime(flipResult.elapsedMs)}
+                </p>
+                <button
+                  className="btn btn-next"
+                  style={{ marginTop: "10px" }}
+                  onClick={flipNext}
+                >
+                  Następna runda
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ZGADNIJ HASŁO — ROZGRYWKA */}
+      {gameType === "haslo" && gameStatus === "round" && (
+        <div className="prawda-host fade-in">
+          <Scoreboard scores={scores} showLives={false} />
+
+          {!hasloWord && !hasloResult && (
+            <div className="prawda-info">
+              <p>
+                Kolej <strong>{turnInfo?.playerName || "?"}</strong>. Pokaż hasło,
+                aby zacząć.
+              </p>
+              <button className="btn btn-start" onClick={hasloNext}>
+                Pokaż hasło
+              </button>
+            </div>
+          )}
+
+          {hasloWord && !hasloResult && (
+            <>
+              <div className="prompt-card">
+                <div className="prompt-badge">🔤 HASŁO</div>
+                <p className="prompt-text" style={{ fontSize: "2rem" }}>
+                  {hasloWord.word}
+                </p>
+                <p className="prompt-player">Opisuje: {hasloWord.playerName}</p>
+                <p style={{ color: "var(--red-wrong)", marginTop: "8px" }}>
+                  🚫 Nie używaj: {hasloWord.taboo.join(", ")}
+                </p>
+              </div>
+              <div className="controls-section">
+                <button className="btn btn-next" onClick={hasloGuessed}>
+                  ✅ Zgadnięto!
+                </button>{" "}
+                <button className="btn btn-elimination" onClick={hasloSkip}>
+                  ⏭ Pomiń
+                </button>
+              </div>
+            </>
+          )}
+
+          {hasloResult && (
+            <div className="vote-result-panel fade-in">
+              <p className="vote-result-title">
+                {hasloResult.guessed
+                  ? `✅ ${hasloResult.playerName} +1 pkt!`
+                  : `⏭ Pominięto (${hasloResult.playerName})`}
+              </p>
+              <button
+                className="btn btn-next"
+                style={{ marginTop: "10px" }}
+                onClick={hasloNext}
+              >
+                Następne hasło
+              </button>
             </div>
           )}
         </div>

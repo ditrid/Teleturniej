@@ -30,7 +30,7 @@ export default function IntroVideo() {
     <VideoOverlay
       src={INTRO_VIDEO}
       onEnded={finish}
-      muted
+      muted={false}
       showSoundToggle
       skipLabel="Pomiń intro"
     />

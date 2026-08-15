@@ -13,9 +13,22 @@ const BUZZER_TIME = 20;
 // Formatowanie kwot (np. 1 000 000 zł)
 const money = (n) => `${(n || 0).toLocaleString("pl-PL")} zł`;
 
+// Formatowanie czasu (ms) → np. "12.4 s" lub "1:05"
+const formatTime = (ms) => {
+  if (!ms || ms < 0) return "0.0 s";
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  const dec = Math.floor((ms % 1000) / 100);
+  return m > 0 ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}.${dec} s`;
+};
+
 // Gry oparte o turę (kolejność graczy + głosowanie)
 const isTurnGame = (t) =>
-  ["prawda", "szalenstwo", "krol", "filmowy"].includes(t);
+  ["prawda", "szalenstwo", "krol", "filmowy", "karaoke"].includes(t);
+
+// Quizy "wszyscy naraz" (odpowiedzi jednoczesne)
+const isRapidQuiz = (t) => ["quiz-rapid", "melodia"].includes(t);
 
 // Etykiety kart (prompt.type -> wygląd)
 const PROMPT_BADGES = {
@@ -24,6 +37,7 @@ const PROMPT_BADGES = {
   szalenstwo: { emoji: "🍻", label: "SZALEŃSTWO PYTANIA", className: "truth" },
   krol: { emoji: "👑", label: "KRÓL IMPREZY", className: "dare" },
   filmowy: { emoji: "🎬", label: "FILMOWY KWAK", className: "truth" },
+  karaoke: { emoji: "🎤", label: "KARAOKE", className: "dare" },
 };
 
 export default function Join() {
@@ -103,6 +117,13 @@ export default function Join() {
   const [friendUsed, setFriendUsed] = useState(false);
   const [friendHint, setFriendHint] = useState(null);
 
+  // --- Flip Cup Challenge ---
+  const [flipState, setFlipState] = useState(null);
+  const [flipNow, setFlipNow] = useState(0);
+
+  // --- Zgadnij Hasło ---
+  const [hasloWord, setHasloWord] = useState(null);
+
   // Refs to avoid dependency issues in useEffect
   const playerIdRef = useRef(playerId);
   playerIdRef.current = playerId;
@@ -138,6 +159,19 @@ export default function Join() {
       }
     };
   }, [iBuzzed, answered, answerResult]);
+
+  // Licznik czasu rundy Flip Cup
+  useEffect(() => {
+    const startedAt = flipState && flipState.timerStartedAt;
+    if (!startedAt) {
+      setFlipNow(0);
+      return;
+    }
+    const tick = () => setFlipNow(Date.now());
+    tick();
+    const id = setInterval(tick, 200);
+    return () => clearInterval(id);
+  }, [flipState && flipState.timerStartedAt]);
 
   // Track socket connection status
   useEffect(() => {
@@ -386,8 +420,35 @@ export default function Join() {
       if (me && me.eliminated) setMilionerzyEliminated(true);
     });
 
-    // Auto-rejoin if we have saved playerId + gameCode
-    if (savedPlayerId && savedGameCode && savedGameCode.length === 6) {
+    // --- Flip Cup Challenge ---
+    socket.on("flip-state", (s) => {
+      setFlipState(s);
+    });
+    socket.on("flip-timer-started", ({ startedAt }) => {
+      setFlipState((prev) =>
+        prev ? { ...prev, timerStartedAt: startedAt } : prev
+      );
+    });
+    socket.on("flip-round-won", () => {
+      setFlipState((prev) => (prev ? { ...prev, timerStartedAt: null } : prev));
+    });
+
+    // --- Zgadnij Hasło ---
+    socket.on("haslo-word", (w) => setHasloWord(w));
+    socket.on("haslo-result", () => setHasloWord(null));
+
+    // Nowy kod z URL ma priorytet nad auto-rejoinem — gracz świadomie chce
+    // dołączyć do innej gry (np. zeskanował nowy QR). Czyścimy stare dane,
+    // żeby nie blokowały dołączenia do nowej gry.
+    const wantsNewGame =
+      codeFromUrl && codeFromUrl.length === 6 && codeFromUrl !== savedGameCode;
+
+    if (wantsNewGame) {
+      console.log("[Join] Auto-joining with code from URL:", codeFromUrl);
+      localStorage.removeItem("playerId");
+      localStorage.removeItem("gameCode");
+      socket.emit("join-game", { code: codeFromUrl });
+    } else if (savedPlayerId && savedGameCode && savedGameCode.length === 6) {
       console.log("[Join] Auto-rejoining with playerId:", savedPlayerId, "| code:", savedGameCode);
       setGameCode(savedGameCode);
       socket.emit("rejoin-game", { code: savedGameCode, playerId: savedPlayerId });
@@ -432,12 +493,78 @@ export default function Join() {
       socket.off("milionerzy-fifty-result");
       socket.off("milionerzy-friend-result");
       socket.off("milionerzy-result");
+      socket.off("flip-state");
+      socket.off("flip-timer-started");
+      socket.off("flip-round-won");
+      socket.off("haslo-word");
+      socket.off("haslo-result");
     };
   }, [socket]); // Stable – only re-registers when socket changes
 
   const saveGameCode = () => {
     localStorage.setItem("gameCode", gameCodeRef.current);
   };
+
+  // Gracz wychodzi z gry i wraca do ekranu wpisywania kodu.
+  const leaveGame = useCallback(() => {
+    const code = gameCodeRef.current;
+    const pid = playerIdRef.current;
+    if (code) {
+      socket.emit("leave-game", { code, playerId: pid });
+    }
+
+    localStorage.removeItem("playerId");
+    localStorage.removeItem("gameCode");
+
+    setStep("code");
+    setGameCode("");
+    setPlayerId(null);
+    setPlayerName("");
+    setError("");
+    setPlayers([]);
+    setGameType("quiz");
+    setGameOverData(null);
+    setEliminated(false);
+    setMilionerzyEliminated(false);
+    setCurrentQuestion(null);
+    setBuzzerLocked(false);
+    setIBuzzed(false);
+    setShowAnswers(false);
+    setAnswers([]);
+    setAnswerResult(null);
+    setAnswered(false);
+    setScores([]);
+    setMyLives(3);
+    setTurnInfo(null);
+    setPrompt(null);
+    setSkipNotice(null);
+    setVoteRequest(null);
+    setMyVote(null);
+    setVoteResult(null);
+    setRapidAnswered(false);
+    setRapidResult(null);
+    setNigdyPrompt(null);
+    setNigdyAnswered(false);
+    setNigdyReveal(null);
+    setKtoPrompt(null);
+    setKtoVoted(false);
+    setKtoReveal(null);
+    setMemyPrompt(null);
+    setMemyCaption("");
+    setMemySubmitted(false);
+    setMemyVoteRequest(null);
+    setMemyVoted(false);
+    setMemyResult(null);
+    setMilionerzyQuestion(null);
+    setMilionerzyAnswered(false);
+    setMilionerzyResult(null);
+    setFiftyKeep(null);
+    setFiftyUsed(false);
+    setFriendUsed(false);
+    setFriendHint(null);
+    setEliminationDone(false);
+    setWinDone(false);
+  }, [socket]);
 
   const joinGame = useCallback(() => {
     if (gameCode.length !== 6) {
@@ -685,6 +812,22 @@ export default function Join() {
               </p>
             </div>
           )}
+          <button
+            type="button"
+            onClick={leaveGame}
+            style={{
+              marginTop: "24px",
+              padding: "12px 28px",
+              fontSize: "1rem",
+              background: "transparent",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "var(--radius)",
+              cursor: "pointer",
+            }}
+          >
+            Wyjdź z gry
+          </button>
         </div>
         </>
       )}
@@ -817,8 +960,8 @@ export default function Join() {
         </div>
       )}
 
-      {/* PLAYING (szybki quiz) */}
-      {step === "playing" && !eliminated && gameType === "quiz-rapid" && !gameOverData && (
+      {/* PLAYING (szybki quiz / melodia) */}
+      {step === "playing" && !eliminated && isRapidQuiz(gameType) && !gameOverData && (
         <div className="game-section">
           <div className="my-score-bar">
             Moje punkty: <strong>{myScorePoints}</strong>
@@ -1183,6 +1326,145 @@ export default function Join() {
         </div>
       )}
 
+      {/* PLAYING (flip-cup) */}
+      {step === "playing" && gameType === "flip-cup" && !gameOverData && flipState && (
+        <div className="game-section">
+          {(() => {
+            const myTeam = flipState.teams.find((t) =>
+              t.players.includes(playerName)
+            );
+            return (
+              <>
+                <div className="my-score-bar">
+                  {myTeam
+                    ? `${myTeam.emoji} ${myTeam.name}`
+                    : "Twoja drużyna"}
+                </div>
+
+                <div style={{ textAlign: "center", marginBottom: "15px" }}>
+                  <p className="vote-result-title" style={{ fontSize: "1.6rem" }}>
+                    {flipState.teams[0]?.emoji} {flipState.scores.A} :{" "}
+                    {flipState.scores.B} {flipState.teams[1]?.emoji}
+                  </p>
+                  {flipState.timerStartedAt && (
+                    <p
+                      style={{
+                        fontSize: "2rem",
+                        color: "var(--accent-gold)",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      ⏱ {formatTime(flipNow - flipState.timerStartedAt)}
+                    </p>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "12px",
+                  }}
+                >
+                  {flipState.teams.map((t) => {
+                    const isMine = myTeam && myTeam.id === t.id;
+                    return (
+                      <div
+                        key={t.id}
+                        className="prompt-card"
+                        style={{
+                          textAlign: "center",
+                          border: isMine
+                            ? "2px solid var(--accent-gold)"
+                            : undefined,
+                        }}
+                      >
+                        <div className="prompt-badge">
+                          {t.emoji} {t.name}
+                          {isMine ? " (Ty)" : ""}
+                        </div>
+                        <p className="prompt-player" style={{ marginTop: "8px" }}>
+                          {t.players.join(", ")}
+                        </p>
+                        <p className="prompt-text" style={{ fontSize: "1.8rem" }}>
+                          {flipState.scores[t.id]}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p
+                  style={{
+                    textAlign: "center",
+                    color: "var(--text-secondary)",
+                    marginTop: "20px",
+                  }}
+                >
+                  Odłóż telefon i graj! 📱➡️🥤
+                </p>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* PLAYING (zgadnij hasło) */}
+      {step === "playing" && gameType === "haslo" && !gameOverData && (
+        <div className="game-section">
+          <div className="my-score-bar">
+            Moje punkty: <strong>{myScorePoints}</strong>
+          </div>
+
+          {hasloWord && hasloWord.playerId === playerId && (
+            <div className="prompt-card">
+              <div className="prompt-badge">🔤 TWOJE HASŁO</div>
+              <p className="prompt-text" style={{ fontSize: "2rem" }}>
+                {hasloWord.word}
+              </p>
+              <p style={{ color: "var(--red-wrong)", marginTop: "8px" }}>
+                🚫 Nie używaj: {hasloWord.taboo.join(", ")}
+              </p>
+              <p className="prompt-player" style={{ marginTop: "10px" }}>
+                Opisuj, reszta zgaduje!
+              </p>
+            </div>
+          )}
+
+          {hasloWord && hasloWord.playerId !== playerId && (
+            <div className="waiting-section">
+              <p className="waiting-title">
+                🔤 {hasloWord.playerName} opisuje hasło…
+              </p>
+              <p className="waiting-dots">•••</p>
+            </div>
+          )}
+
+          {!hasloWord && turnInfo && turnInfo.playerId === playerId && (
+            <div className="waiting-section">
+              <p className="waiting-title">Twoja kolej! Czekaj na hasło…</p>
+              <p className="waiting-dots">•••</p>
+            </div>
+          )}
+
+          {!hasloWord && turnInfo && turnInfo.playerId !== playerId && (
+            <div className="waiting-section">
+              <p className="waiting-title">
+                Czekaj… {turnInfo.playerName} zaraz opisze hasło
+              </p>
+              <p className="waiting-dots">•••</p>
+            </div>
+          )}
+
+          {!hasloWord && !turnInfo && (
+            <div className="waiting-section">
+              <p className="waiting-title">Czekam na hasło…</p>
+              <p className="waiting-dots">•••</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* PLAYING (gry tur-bazowane: prawda / szalenstwo / krol / filmowy) */}
       {step === "playing" && isTurnGame(gameType) && !gameOverData && (
         <div className="game-section">
@@ -1361,6 +1643,22 @@ export default function Join() {
               </div>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={leaveGame}
+            style={{
+              marginTop: "24px",
+              padding: "12px 28px",
+              fontSize: "1rem",
+              background: "transparent",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "var(--radius)",
+              cursor: "pointer",
+            }}
+          >
+            Wyjdź z gry
+          </button>
         </div>
       )}
       {/* FILM KONIEC — odpadnięcie / przegrana */}

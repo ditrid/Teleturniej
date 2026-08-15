@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Reużywalny odtwarzacz wideo.
@@ -36,6 +36,32 @@ export default function VideoOverlay({
       if (!next) v.play().catch(() => {});
     }
   };
+
+  // Autoplay z dźwiękiem — przeglądarki mogą zablokować autoodtwarzanie audio
+  // bez gestu użytkownika. Po nieudanej próbie wznawiamy odtwarzanie przy
+  // pierwszej interakcji (dotyk / klik / klawisz).
+  useEffect(() => {
+    if (variant !== "fullscreen" || isMuted) return;
+    const v = videoRef.current;
+    if (!v) return;
+
+    v.play().catch(() => {
+      const cleanup = () => {
+        window.removeEventListener("pointerdown", resume);
+        window.removeEventListener("touchstart", resume);
+        window.removeEventListener("keydown", resume);
+        v.removeEventListener("ended", cleanup);
+      };
+      const resume = () => {
+        v.play().catch(() => {});
+        cleanup();
+      };
+      window.addEventListener("pointerdown", resume);
+      window.addEventListener("touchstart", resume);
+      window.addEventListener("keydown", resume);
+      v.addEventListener("ended", cleanup, { once: true });
+    });
+  }, [variant, isMuted]);
 
   if (variant === "background") {
     return (

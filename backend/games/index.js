@@ -9,6 +9,10 @@ const milionerzy = require("./milionerzy");
 const szalenstwo = require("./szalenstwo");
 const krol = require("./krol");
 const filmowy = require("./filmowy");
+const flipCup = require("./flip-cup");
+const melodia = require("./melodia");
+const haslo = require("./haslo");
+const karaoke = require("./karaoke");
 
 const registry = {};
 
@@ -42,5 +46,9 @@ registerGame(milionerzy);
 registerGame(szalenstwo);
 registerGame(krol);
 registerGame(filmowy);
+registerGame(flipCup);
+registerGame(melodia);
+registerGame(haslo);
+registerGame(karaoke);
 
 module.exports = { registerGame, getGameModule, listGames };

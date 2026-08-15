@@ -213,6 +213,29 @@ io.on("connection", (socket) => {
     }
   };
 
+  // Opuszcza bieżącą grę gracza: wychodzi z pokoju, usuwa gracza z listy
+  // (gdy gra jest w lobby lub zakończona) i powiadamia pozostałych o zmianie.
+  const leaveCurrentGame = (socket) => {
+    const code = socket.data.gameCode;
+    if (!code) return;
+    socket.leave(code);
+
+    const game = engine.getGame(code);
+    const playerId = socket.data.playerId;
+    if (game && playerId && (game.status === "lobby" || game.status === "finished")) {
+      engine.removePlayer(code, playerId);
+      const playersInGame = game.players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+      }));
+      io.to(code).emit("player-joined", { players: playersInGame });
+    }
+
+    socket.data.gameCode = null;
+    socket.data.playerId = null;
+  };
+
   // Host creates a game
   socket.on("create-game", ({ gameType } = {}) => {
     const code = engine.createGame(gameType || "quiz");
@@ -234,7 +257,9 @@ io.on("connection", (socket) => {
       socket.emit("join-error", { message: "Gra już się rozpoczęła" });
       return;
     }
+    leaveCurrentGame(socket);
     socket.join(code);
+    socket.data.gameCode = code;
     socket.emit("join-success", { code });
   });
 
@@ -245,6 +270,7 @@ io.on("connection", (socket) => {
       socket.emit("join-error", { message: "Gra nie istnieje" });
       return;
     }
+    leaveCurrentGame(socket);
     socket.join(code);
 
     const player = engine.addPlayer(code, name, avatar);
@@ -257,6 +283,8 @@ io.on("connection", (socket) => {
       return;
     }
     player.socketId = socket.id;
+    socket.data.gameCode = code;
+    socket.data.playerId = player.id;
     socket.emit("player-set", { player });
 
     const playersInGame = engine.getGame(code).players.map((p) => ({
@@ -265,6 +293,11 @@ io.on("connection", (socket) => {
       avatar: p.avatar,
     }));
     io.to(code).emit("player-joined", { players: playersInGame });
+  });
+
+  // Player leaves a game (np. z lobby / po zakończeniu) — usuwa gracza z listy.
+  socket.on("leave-game", ({ code, playerId }) => {
+    leaveCurrentGame(socket);
   });
 
   // Host starts the game (delegacja do modułu gry)
@@ -281,14 +314,17 @@ io.on("connection", (socket) => {
     }
 
     io.to(code).emit("game-started", { gameType: game.gameType });
-    const TURN_BASED = ["prawda", "szalenstwo", "krol", "filmowy"];
+    const TURN_BASED = ["prawda", "szalenstwo", "krol", "filmowy", "haslo", "karaoke"];
     if (TURN_BASED.includes(game.gameType)) {
       const turn = mod.getTurnPlayer(game);
       io.to(code).emit("turn-update", turn);
     } else if (game.gameType === "quiz") {
       io.to(code).emit("greeting", { text: game.greetingText });
     }
-    // quiz-rapid / nigdy / kto-bardziej / memy / milionerzy — host sam uruchamia pierwszą rundę.
+    // quiz-rapid / nigdy / kto-bardziej / memy / milionerzy / flip-cup — host sam uruchamia pierwszą rundę.
+    if (game.gameType === "flip-cup") {
+      io.to(code).emit("flip-state", mod.getState(game));
+    }
   });
 
   // Host triggers next question (quiz)
@@ -768,6 +804,83 @@ io.on("connection", (socket) => {
     sendScoresAndGameOver(code, result);
   });
 
+  // ===================== FLIP CUP CHALLENGE (asystent) =====================
+
+  socket.on("flip-start-timer", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.startTimer ? mod.startTimer(game) : null;
+    if (!result) return;
+    io.to(code).emit("flip-timer-started", result);
+  });
+
+  socket.on("flip-win-round", ({ code, teamId }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.winRound ? mod.winRound(game, teamId) : null;
+    if (!result) return;
+    io.to(code).emit("flip-round-won", result);
+    io.to(code).emit("flip-state", mod.getState(game));
+    sendScoresAndGameOver(code, result);
+  });
+
+  socket.on("flip-next", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    if (mod && mod.nextRound) mod.nextRound(game);
+    io.to(code).emit("flip-state", mod.getState(game));
+  });
+
+  // ===================== ZGADNIJ HASŁO =====================
+
+  socket.on("haslo-next", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const r = mod && mod.nextWord ? mod.nextWord(game) : null;
+    if (!r) return;
+    io.to(code).emit("haslo-word", r);
+  });
+
+  socket.on("haslo-guessed", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const r = mod && mod.resolve ? mod.resolve(game, true) : null;
+    if (!r) return;
+    io.to(code).emit("haslo-result", r);
+    io.to(code).emit("scores-update", { scores: engine.getScores(code) });
+    if (r.gameOver) {
+      io.to(code).emit("game-over", {
+        winner: r.winner,
+        scores: engine.getScores(code),
+      });
+    } else {
+      io.to(code).emit("turn-update", r.next);
+    }
+  });
+
+  socket.on("haslo-skip", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const r = mod && mod.resolve ? mod.resolve(game, false) : null;
+    if (!r) return;
+    io.to(code).emit("haslo-result", r);
+    io.to(code).emit("scores-update", { scores: engine.getScores(code) });
+    if (r.gameOver) {
+      io.to(code).emit("game-over", {
+        winner: r.winner,
+        scores: engine.getScores(code),
+      });
+    } else {
+      io.to(code).emit("turn-update", r.next);
+    }
+  });
+
   // Rejoin – player reconnects after page refresh during game
   socket.on("rejoin-game", ({ code, playerId }) => {
     const game = engine.getGame(code);
@@ -782,13 +895,17 @@ io.on("connection", (socket) => {
     }
     player.socketId = socket.id;
     socket.join(code);
+    socket.data.gameCode = code;
+    socket.data.playerId = playerId;
     socket.emit("rejoin-success", { player, gameType: game.gameType });
 
     const mod = getModule(game);
 
-    // Gry tur-bazowane (Prawda/Wyzwanie + klony) — odtwórz aktualny stan gry
+    // Gry tur-bazowane (Prawda/Wyzwanie + klony + hasło + karaoke) — odtwórz aktualny stan gry
     if (
-      ["prawda", "szalenstwo", "krol", "filmowy"].includes(game.gameType) &&
+      ["prawda", "szalenstwo", "krol", "filmowy", "haslo", "karaoke"].includes(
+        game.gameType
+      ) &&
       game.status === "round"
     ) {
       const turn = mod.getTurnPlayer(game);
@@ -827,6 +944,24 @@ io.on("connection", (socket) => {
     // Send current scores
     socket.emit("scores-update", { scores: engine.getScores(code) });
 
+    // Flip Cup — odtwórz stan drużyn i tablicy
+    if (game.gameType === "flip-cup" && mod && mod.getState) {
+      socket.emit("flip-state", mod.getState(game));
+    }
+
+    // Zgadnij Hasło — odtwórz aktualne hasło (klient pokazuje je tylko graczowi w turze)
+    if (game.gameType === "haslo" && game.currentWord) {
+      const turnPlayer = game.players.find(
+        (p) => p.id === game.currentPlayerId
+      );
+      socket.emit("haslo-word", {
+        playerId: game.currentPlayerId,
+        playerName: turnPlayer ? turnPlayer.name : "",
+        word: game.currentWord.word,
+        taboo: game.currentWord.taboo || [],
+      });
+    }
+
     // If game is in finale, notify
     if (game.round === "finale") {
       socket.emit("finale-started", { players: engine.getScores(code) });
@@ -836,6 +971,7 @@ io.on("connection", (socket) => {
   // Disconnect
   socket.on("disconnect", () => {
     console.log("Rozłączono:", socket.id);
+    leaveCurrentGame(socket);
     Object.values(answerTimeouts).forEach((t) => clearTimeout(t));
   });
 });

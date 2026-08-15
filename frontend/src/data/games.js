@@ -115,6 +115,7 @@ export const games = [
   {
     id: 103,
     title: "FLIP CUP\nCHALLENGE",
+    gameType: "flip-cup",
     image: flipCup,
     categoryId: "alkoholowe",
     categoryName: "Alkoholowe",
@@ -231,6 +232,7 @@ export const games = [
   {
     id: 5,
     title: "Melodia czy Fałsz",
+    gameType: "melodia",
     categoryId: "szybkie",
     categoryName: "Szybkie gry",
     categoryIcon: "⚡",
@@ -298,6 +300,7 @@ export const games = [
   {
     id: 7,
     title: "Karaoke Challenge",
+    gameType: "karaoke",
     categoryId: "druzynowe",
     categoryName: "Drużynowe",
     categoryIcon: "👥",
@@ -310,6 +313,23 @@ export const games = [
     gradient: "from-pink-400 via-rose-500 to-red-600",
     popular: false,
     new: false,
+  },
+  {
+    id: 9,
+    title: "Zgadnij Hasło",
+    gameType: "haslo",
+    categoryId: "klasyki",
+    categoryName: "Klasyki",
+    categoryIcon: "🏆",
+    description: "Opisz hasło bez użycia słów tabu. Grupa zgaduje!",
+    difficulty: "Łatwy",
+    players: "2–8",
+    rating: 4.8,
+    plays: "9,8 tys.",
+    emoji: "🔤",
+    gradient: "from-teal-400 via-cyan-500 to-sky-600",
+    popular: false,
+    new: true,
   },
 ];
 

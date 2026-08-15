@@ -1,9 +1,47 @@
 import { useNavigate } from "react-router-dom";
 
-export default function GameCard({ game, index = 0 }) {
+export default function GameCard({ game, index = 0, variant = "featured" }) {
   const navigate = useNavigate();
 
   const open = () => navigate(`/gra/${game.id}`);
+
+  // Karty z obrazkiem — kompaktowe (katalog gier na /gry)
+  if (game.image && variant === "grid") {
+    return (
+      <article
+        onClick={open}
+        className="group flex w-full cursor-pointer items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-night-850 p-3 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-[3px] hover:shadow-[0_8px_30px_-8px_rgba(255,229,0,0.15)] animate-rise"
+        style={{
+          animationDelay: `${Math.min(index * 60, 420)}ms`,
+          borderColor: game.borderColor ? `${game.borderColor}40` : undefined,
+        }}
+      >
+        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-night-800">
+          <img
+            src={game.image}
+            alt={game.title}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          />
+          {game.badge && (
+            <span
+              className={`absolute right-1 top-1 rounded-md ${game.badgeColor} px-1.5 py-0.5 text-[10px] font-bold text-white shadow`}
+            >
+              {game.badge}
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-gold-300">
+            {game.categoryIcon} {game.categoryName}
+          </span>
+          <h3 className="mt-1 font-display text-base font-extrabold leading-tight text-white whitespace-pre-line">
+            {game.title}
+          </h3>
+          <p className="mt-1 text-[11px] text-slate-500">{game.players}</p>
+        </div>
+      </article>
+    );
+  }
 
   // Karty z obrazkiem (Polecane gry na stronie głównej)
   if (game.image) {
