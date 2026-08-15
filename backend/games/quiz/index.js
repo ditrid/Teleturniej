@@ -1,5 +1,5 @@
 // Gra: Kwak Kwiz — quiz z buzzerem.
-const { questions, finalQuestions } = require("../../questions");
+const { questions, finalQuestions, filterByDifficulty } = require("../../questions");
 const { shuffleArray } = require("../../engine/utils");
 
 module.exports = {
@@ -23,18 +23,19 @@ module.exports = {
       mainRoundQuestions: 10,
       buzzerLocked: false,
       greetingText: "",
+      difficulty: "mieszany",
     };
   },
 
   // Rozpoczęcie rozgrywki przez hosta.
-  start(game) {
+  start(game, settings = {}) {
     if (game.players.length < 2) {
       return { ok: false, error: "Za mało graczy (min. 2)" };
     }
-    game.roundQuestions = shuffleArray([...questions]).slice(
-      0,
-      game.mainRoundQuestions
-    );
+    game.difficulty = settings.difficulty || "mieszany";
+    game.roundQuestions = shuffleArray(
+      filterByDifficulty(questions, game.difficulty)
+    ).slice(0, game.mainRoundQuestions);
     game.currentQuestionIndex = 0;
     game.round = "main";
     game.status = "greeting";
@@ -56,12 +57,13 @@ module.exports = {
       game.currentQuestionIndex++;
       game.status = "round";
     } else if (game.round === "finale") {
-      const unused = finalQuestions.filter(
+      const finalPool = filterByDifficulty(finalQuestions, game.difficulty);
+      const unused = finalPool.filter(
         (q) => !game.finalQuestionsUsed.includes(q.id)
       );
       if (unused.length === 0) {
         game.finalQuestionsUsed = [];
-        question = shuffleArray([...finalQuestions])[0];
+        question = shuffleArray([...finalPool])[0];
       } else {
         question = shuffleArray(unused)[0];
       }

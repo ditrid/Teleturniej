@@ -59,6 +59,17 @@ const PROMPT_BADGES = {
   karaoke: { emoji: "🎤", label: "KARAOKE", className: "dare" },
 };
 
+// Poziomy trudności pytań (quizy i Milionerzy)
+const DIFFICULTY_OPTIONS = [
+  { id: "mieszany", label: "Mieszany", emoji: "🎲" },
+  { id: "latwy", label: "Łatwy", emoji: "🟢" },
+  { id: "sredni", label: "Średni", emoji: "🟡" },
+  { id: "trudny", label: "Trudny", emoji: "🔴" },
+];
+
+// Gry quizowe z poziomem trudności
+const isQuizGame = (t) => ["quiz", "quiz-rapid", "milionerzy"].includes(t);
+
 export default function Host() {
   const socket = useSocket();
   const navigate = useNavigate();
@@ -90,6 +101,7 @@ export default function Host() {
   const [gameType, setGameType] = useState(searchParams.get("game") || "quiz");
   const [prawdaLevel, setPrawdaLevel] = useState("grzeczne");
   const [prawdaRounds, setPrawdaRounds] = useState(2);
+  const [difficulty, setDifficulty] = useState("mieszany");
   const [turnInfo, setTurnInfo] = useState(null);
   const [prompt, setPrompt] = useState(null);
   const [skipInfo, setSkipInfo] = useState(null);
@@ -520,6 +532,8 @@ export default function Host() {
         level: prawdaLevel,
         rounds: prawdaRounds,
       });
+    } else if (isQuizGame(gameType)) {
+      socket.emit("start-game", { code: gameCode, difficulty });
     } else {
       socket.emit("start-game", { code: gameCode });
     }
@@ -752,6 +766,28 @@ export default function Host() {
             </div>
           )}
 
+          {isQuizGame(gameType) && (
+            <div className="settings-panel fade-in">
+              <h3>Ustawienia gry</h3>
+              <div className="settings-group">
+                <label>Poziom trudności pytań:</label>
+                <div className="level-grid">
+                  {DIFFICULTY_OPTIONS.map((d) => (
+                    <button
+                      key={d.id}
+                      className={`level-chip ${
+                        difficulty === d.id ? "selected" : ""
+                      }`}
+                      onClick={() => setDifficulty(d.id)}
+                    >
+                      {d.emoji} {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {gameType === "quiz" && preselected && (
             <p
               style={{
@@ -846,6 +882,20 @@ export default function Host() {
             >
               🎴 Poziom: {LEVELS.find((l) => l.id === prawdaLevel)?.label} ·
               Rund: {prawdaRounds}
+            </p>
+          )}
+
+          {isQuizGame(gameType) && (
+            <p
+              style={{
+                textAlign: "center",
+                color: "var(--text-secondary)",
+                fontSize: "0.9rem",
+                marginTop: "10px",
+              }}
+            >
+              🎯 Trudność:{" "}
+              {DIFFICULTY_OPTIONS.find((d) => d.id === difficulty)?.label}
             </p>
           )}
 

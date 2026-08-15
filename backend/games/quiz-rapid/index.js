@@ -1,5 +1,5 @@
 // Gra: Szybki Quiz — wszyscy odpowiadają jednocześnie, liczy się wiedza i refleks.
-const { questions } = require("../../questions");
+const { questions, filterByDifficulty } = require("../../questions");
 const { shuffleArray } = require("../../engine/utils");
 
 module.exports = {
@@ -27,7 +27,9 @@ module.exports = {
     }
     const n = Number(settings.rounds) || game.mainRoundQuestions || 8;
     game.mainRoundQuestions = n;
-    game.roundQuestions = shuffleArray([...questions]).slice(0, n);
+    game.roundQuestions = shuffleArray(
+      filterByDifficulty(questions, settings.difficulty)
+    ).slice(0, n);
     game.currentQuestionIndex = 0;
     game.usedQuestions = [];
     game.answers = {};

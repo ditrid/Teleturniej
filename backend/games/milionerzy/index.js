@@ -1,6 +1,6 @@
 // Gra: Milionerzy Party — drabinka pytań z rosnącymi stawkami, koła ratunkowe 50:50 i przyjaciel.
 // Wszyscy gracze grają równolegle; błędna odpowiedź = odpadnięcie z gwarantowaną sumą.
-const { questions } = require("../../questions");
+const { questions, filterByDifficulty } = require("../../questions");
 const { shuffleArray } = require("../../engine/utils");
 
 // Klasyczna drabinka "Milionerów" (12 szczebli) z progami gwarantowanymi.
@@ -48,11 +48,23 @@ module.exports = {
     };
   },
 
-  start(game) {
+  start(game, settings = {}) {
     if (game.players.length < 2) {
       return { ok: false, error: "Za mało graczy (min. 2)" };
     }
-    game.questions = shuffleArray([...questions]).slice(0, LADDER.length);
+    // Filtruj po poziomie trudności i ułóż drabinkę od najłatwiejszych do najtrudniejszych.
+    const difficulty = settings.difficulty || "mieszany";
+    const pool = filterByDifficulty(questions, difficulty);
+    const sorted = [...pool].sort(
+      (a, b) => (a.difficulty || 2) - (b.difficulty || 2)
+    );
+    const n = Math.min(LADDER.length, sorted.length);
+    const selected = [];
+    for (let i = 0; i < n; i++) {
+      const idx = Math.floor((i / Math.max(1, n - 1)) * (sorted.length - 1));
+      selected.push(sorted[idx]);
+    }
+    game.questions = selected;
     game.currentIndex = 0;
     game.currentQuestion = null;
     game.answers = {};

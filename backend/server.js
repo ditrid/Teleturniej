@@ -301,13 +301,13 @@ io.on("connection", (socket) => {
   });
 
   // Host starts the game (delegacja do modułu gry)
-  socket.on("start-game", ({ code, level, rounds } = {}) => {
+  socket.on("start-game", ({ code, level, rounds, difficulty } = {}) => {
     const game = engine.getGame(code);
     if (!game || game.hostId !== socket.id) return;
     const mod = getModule(game);
     if (!mod || !mod.start) return;
 
-    const result = mod.start(game, { level, rounds });
+    const result = mod.start(game, { level, rounds, difficulty });
     if (!result || !result.ok) {
       socket.emit("start-error", { message: (result && result.error) || "Nie można rozpocząć gry" });
       return;

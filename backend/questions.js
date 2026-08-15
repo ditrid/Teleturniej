@@ -735,6 +735,66 @@ const questions = [
     answers: ["Stambuł", "Ankara", "Izmir", "Antalya"],
     correct: 1,
   },
+  {
+    id: 121,
+    question: "Ile w przybliżeniu wynosi liczba Avogadro?",
+    answers: ["6,02 × 10²³", "3,14 × 10²³", "1,6 × 10¹⁹", "9,8 × 10²³"],
+    correct: 0,
+  },
+  {
+    id: 122,
+    question: "Kto napisał 'Krytykę czystego rozumu'?",
+    answers: ["Georg Hegel", "Immanuel Kant", "Friedrich Nietzsche", "Arthur Schopenhauer"],
+    correct: 1,
+  },
+  {
+    id: 123,
+    question: "Jaki pierwiastek ma liczbę atomową 79?",
+    answers: ["Platyna", "Srebro", "Złoto", "Rtęć"],
+    correct: 2,
+  },
+  {
+    id: 124,
+    question: "Kto był ostatnim królem Polski?",
+    answers: ["Stanisław August Poniatowski", "August III Sas", "Jan III Sobieski", "Zygmunt III Waza"],
+    correct: 0,
+  },
+  {
+    id: 125,
+    question: "Gdzie powstał najstarszy uniwersytet na świecie?",
+    answers: ["Paryż", "Oksford", "Bolonia", "Praga"],
+    correct: 2,
+  },
+  {
+    id: 126,
+    question: "Kto napisał 'Fausta'?",
+    answers: ["Friedrich Schiller", "Johann Wolfgang Goethe", "Heinrich Heine", "Thomas Mann"],
+    correct: 1,
+  },
+  {
+    id: 127,
+    question: "Które państwo jako pierwsze przyznało kobietom prawo głosu?",
+    answers: ["USA", "Nowa Zelandia", "Wielka Brytania", "Szwajcaria"],
+    correct: 1,
+  },
+  {
+    id: 128,
+    question: "Co oznacza skrót HTML?",
+    answers: ["HyperText Markup Language", "High Tech Modern Language", "Hyper Transfer Mode Language", "Home Tool Markup Language"],
+    correct: 0,
+  },
+  {
+    id: 129,
+    question: "Kto skomponował 'Toccatę i fugę d-moll'?",
+    answers: ["Ludwig van Beethoven", "Johann Sebastian Bach", "Wolfgang Amadeus Mozart", "Antonio Vivaldi"],
+    correct: 1,
+  },
+  {
+    id: 130,
+    question: "Jaka jest stolica Australii?",
+    answers: ["Sydney", "Melbourne", "Perth", "Canberra"],
+    correct: 3,
+  },
 ];
 
 const finalQuestions = [
@@ -810,4 +870,38 @@ const finalQuestions = [
   },
 ];
 
-module.exports = { questions, finalQuestions };
+// ===== POZIOMY TRUDNOŚCI =====
+// 1 = łatwy, 2 = średni (domyślny), 3 = trudny.
+// Pytania nieujęte w mapie są traktowane jako "średni".
+const difficultyMap = {
+  // łatwe
+  1: 1, 2: 1, 5: 1, 8: 1, 10: 1, 11: 1, 13: 1, 14: 1, 15: 1, 17: 1,
+  18: 1, 20: 1, 21: 1, 23: 1, 25: 1, 29: 1, 30: 1, 31: 1, 34: 1, 37: 1,
+  46: 1, 47: 1, 49: 1, 56: 1, 57: 1, 59: 1, 60: 1, 65: 1, 66: 1, 69: 1,
+  72: 1, 73: 1, 74: 1, 76: 1, 77: 1, 79: 1, 90: 1, 91: 1, 96: 1, 97: 1,
+  99: 1, 102: 1, 104: 1, 107: 1, 114: 1, 115: 1, 118: 1, 120: 1,
+  // trudne
+  6: 3, 19: 3, 26: 3, 38: 3, 41: 3, 44: 3, 50: 3, 53: 3, 54: 3, 55: 3,
+  64: 3, 70: 3, 71: 3, 75: 3, 93: 3, 95: 3, 98: 3, 101: 3, 103: 3, 105: 3,
+  106: 3, 108: 3, 109: 3, 110: 3, 113: 3, 116: 3, 117: 3, 119: 3,
+  121: 3, 122: 3, 123: 3, 124: 3, 125: 3, 126: 3, 127: 3, 128: 3, 129: 3, 130: 3,
+  // finałowe (f1-f10)
+  f1: 3, f2: 2, f3: 1, f4: 2, f5: 3, f6: 2, f7: 1, f8: 2, f9: 1, f10: 2,
+};
+
+questions.forEach((q) => {
+  q.difficulty = difficultyMap[q.id] !== undefined ? difficultyMap[q.id] : 2;
+});
+finalQuestions.forEach((q) => {
+  q.difficulty = difficultyMap[q.id] !== undefined ? difficultyMap[q.id] : 2;
+});
+
+// Filtruje pulę pytań po poziomie trudności ("latwy" | "sredni" | "trudny" | "mieszany").
+function filterByDifficulty(pool, difficulty) {
+  const levels = { latwy: 1, sredni: 2, trudny: 3 };
+  const level = levels[difficulty];
+  if (!level) return pool;
+  return pool.filter((q) => q.difficulty === level);
+}
+
+module.exports = { questions, finalQuestions, filterByDifficulty };
