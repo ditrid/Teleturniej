@@ -198,6 +198,21 @@ io.on("connection", (socket) => {
 
   const getModule = (game) => (game ? getGameModule(game.gameType) : null);
 
+  // Wspólne zakończenie rundy/gry dla gier imprezowych: aktualizacja punktów + koniec gry.
+  const sendScoresAndGameOver = (code, result) => {
+    io.to(code).emit("scores-update", { scores: engine.getScores(code) });
+    if (result && result.gameOver) {
+      const game = engine.getGame(code);
+      if (game) game.status = "finished";
+      let winner = result.winner;
+      if (!winner && game) {
+        const w = [...game.players].sort((a, b) => b.score - a.score)[0];
+        winner = w ? w.name : "Nikt";
+      }
+      io.to(code).emit("game-over", { winner, scores: engine.getScores(code) });
+    }
+  };
+
   // Host creates a game
   socket.on("create-game", ({ gameType } = {}) => {
     const code = engine.createGame(gameType || "quiz");
@@ -266,12 +281,14 @@ io.on("connection", (socket) => {
     }
 
     io.to(code).emit("game-started", { gameType: game.gameType });
-    if (game.gameType === "prawda") {
+    const TURN_BASED = ["prawda", "szalenstwo", "krol", "filmowy"];
+    if (TURN_BASED.includes(game.gameType)) {
       const turn = mod.getTurnPlayer(game);
       io.to(code).emit("turn-update", turn);
-    } else {
+    } else if (game.gameType === "quiz") {
       io.to(code).emit("greeting", { text: game.greetingText });
     }
+    // quiz-rapid / nigdy / kto-bardziej / memy / milionerzy — host sam uruchamia pierwszą rundę.
   });
 
   // Host triggers next question (quiz)
@@ -454,6 +471,16 @@ io.on("connection", (socket) => {
     io.to(code).emit("prompt", result);
   });
 
+  // Host pokazuje kartę w grach tur-bazowanych (szalenstwo / krol / filmowy)
+  socket.on("next-card", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.nextPrompt ? mod.nextPrompt(game) : null;
+    if (!result) return;
+    io.to(code).emit("prompt", result);
+  });
+
   socket.on("skip-turn", ({ code }) => {
     const game = engine.getGame(code);
     if (!game) return;
@@ -527,6 +554,220 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ===================== SZYBKI QUIZ (quiz-rapid) =====================
+
+  socket.on("rapid-answer", ({ code, playerId, answerIndex }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const result = mod && mod.submitAnswer ? mod.submitAnswer(game, playerId, answerIndex) : null;
+    if (!result) return;
+    io.to(code).emit("rapid-answered", {
+      answeredCount: result.answeredCount,
+      total: result.total,
+    });
+  });
+
+  socket.on("rapid-reveal", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.finalizeRound ? mod.finalizeRound(game) : null;
+    if (!result) return;
+    io.to(code).emit("rapid-result", result);
+    sendScoresAndGameOver(code, result);
+  });
+
+  // ===================== NIGDY PRZENIGDY =====================
+
+  socket.on("nigdy-next", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.nextPrompt ? mod.nextPrompt(game) : null;
+    if (!result) return;
+    if (result.gameOver) {
+      sendScoresAndGameOver(code, result);
+    } else {
+      io.to(code).emit("nigdy-prompt", result);
+    }
+  });
+
+  socket.on("nigdy-answer", ({ code, playerId, did }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const result = mod && mod.answer ? mod.answer(game, playerId, did) : null;
+    if (!result) return;
+    io.to(code).emit("nigdy-answered", {
+      answeredCount: result.answeredCount,
+      total: result.total,
+    });
+  });
+
+  socket.on("nigdy-reveal", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.reveal ? mod.reveal(game) : null;
+    if (!result) return;
+    io.to(code).emit("nigdy-reveal", result);
+    sendScoresAndGameOver(code, result);
+  });
+
+  // ===================== KTO BARDZIEJ? =====================
+
+  socket.on("kto-next", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.nextPrompt ? mod.nextPrompt(game) : null;
+    if (!result) return;
+    if (result.gameOver) {
+      sendScoresAndGameOver(code, result);
+    } else {
+      io.to(code).emit("kto-prompt", result);
+    }
+  });
+
+  socket.on("kto-vote", ({ code, playerId, targetId }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const result = mod && mod.vote ? mod.vote(game, playerId, targetId) : null;
+    if (!result) return;
+    io.to(code).emit("kto-voted", {
+      votedCount: result.votedCount,
+      total: result.total,
+    });
+  });
+
+  socket.on("kto-reveal", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.reveal ? mod.reveal(game) : null;
+    if (!result) return;
+    io.to(code).emit("kto-reveal", result);
+    sendScoresAndGameOver(code, result);
+  });
+
+  // ===================== MEMY RZĄDZĄ =====================
+
+  socket.on("memy-next", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.nextMeme ? mod.nextMeme(game) : null;
+    if (!result) return;
+    if (result.gameOver) {
+      sendScoresAndGameOver(code, result);
+    } else {
+      io.to(code).emit("memy-prompt", result);
+    }
+  });
+
+  socket.on("memy-caption", ({ code, playerId, text }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const result = mod && mod.submitCaption ? mod.submitCaption(game, playerId, text) : null;
+    if (!result) return;
+    io.to(code).emit("memy-caption-update", {
+      captionCount: result.captionCount,
+      total: result.total,
+    });
+  });
+
+  socket.on("memy-start-vote", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.startVote ? mod.startVote(game) : null;
+    if (!result) return;
+    if (result.needMore) {
+      socket.emit("memy-need-more", { count: result.count });
+      return;
+    }
+    io.to(code).emit("memy-vote-request", result);
+  });
+
+  socket.on("memy-vote", ({ code, playerId, targetId }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const result = mod && mod.vote ? mod.vote(game, playerId, targetId) : null;
+    if (!result) return;
+    io.to(code).emit("memy-vote-update", {
+      votedCount: result.votedCount,
+      total: result.total,
+    });
+    if (result.votedCount >= result.total) {
+      const final = mod.finalizeVote(game);
+      io.to(code).emit("memy-result", final);
+      sendScoresAndGameOver(code, final);
+    }
+  });
+
+  socket.on("memy-reveal", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const final = mod && mod.finalizeVote ? mod.finalizeVote(game) : null;
+    if (!final) return;
+    io.to(code).emit("memy-result", final);
+    sendScoresAndGameOver(code, final);
+  });
+
+  // ===================== MILIONERZY PARTY =====================
+
+  socket.on("milionerzy-next", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const q = mod && mod.getNextQuestion ? mod.getNextQuestion(game) : null;
+    if (!q) return;
+    io.to(code).emit("milionerzy-question", q);
+  });
+
+  socket.on("milionerzy-fifty", ({ code, playerId }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const result = mod && mod.useFifty ? mod.useFifty(game, playerId) : null;
+    if (result) socket.emit("milionerzy-fifty-result", result);
+  });
+
+  socket.on("milionerzy-friend", ({ code, playerId }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const result = mod && mod.useFriend ? mod.useFriend(game, playerId) : null;
+    if (result) socket.emit("milionerzy-friend-result", result);
+  });
+
+  socket.on("milionerzy-answer", ({ code, playerId, answerIndex }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const result = mod && mod.lockAnswer ? mod.lockAnswer(game, playerId, answerIndex) : null;
+    if (!result) return;
+    io.to(code).emit("milionerzy-answered", {
+      answeredCount: result.answeredCount,
+      total: result.total,
+    });
+  });
+
+  socket.on("milionerzy-reveal", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const result = mod && mod.finalizeRound ? mod.finalizeRound(game) : null;
+    if (!result) return;
+    io.to(code).emit("milionerzy-result", result);
+    sendScoresAndGameOver(code, result);
+  });
+
   // Rejoin – player reconnects after page refresh during game
   socket.on("rejoin-game", ({ code, playerId }) => {
     const game = engine.getGame(code);
@@ -545,8 +786,11 @@ io.on("connection", (socket) => {
 
     const mod = getModule(game);
 
-    // Prawda czy Wyzwanie — odtwórz aktualny stan gry
-    if (game.gameType === "prawda" && game.status === "round") {
+    // Gry tur-bazowane (Prawda/Wyzwanie + klony) — odtwórz aktualny stan gry
+    if (
+      ["prawda", "szalenstwo", "krol", "filmowy"].includes(game.gameType) &&
+      game.status === "round"
+    ) {
       const turn = mod.getTurnPlayer(game);
       if (turn) socket.emit("turn-update", turn);
       if (game.currentPrompt) {

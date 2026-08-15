@@ -4,11 +4,42 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
 import Scoreboard from "../components/Scoreboard";
 import { LEVELS, ROUND_OPTIONS, VOTE_OPTIONS } from "../data/truthOrDare";
+import VideoOverlay from "../components/VideoOverlay";
+import { LOADING_VIDEOS, randomOf } from "../videos";
 import "../styles/theme.css";
 import "../styles/host.css";
 
 const MAX_PLAYERS = 8;
 const BUZZER_TIME = 20;
+
+const GAME_META = {
+  quiz: { name: "Kwak Kwiz", emoji: "🧠", desc: "Quiz z buzzerem" },
+  prawda: { name: "Prawda czy Wyzwanie", emoji: "🔥", desc: "Karty + głosowanie" },
+  "quiz-rapid": { name: "Szybki Quiz", emoji: "⚡", desc: "Wszyscy odpowiadają naraz" },
+  nigdy: { name: "Nigdy Przenigdy", emoji: "💋", desc: "Kto ma coś na sumieniu" },
+  "kto-bardziej": { name: "Kto Bardziej?", emoji: "🕺", desc: "Głosowanie na gracza" },
+  memy: { name: "Memy Rządzą", emoji: "🤣", desc: "Podpisy pod memy" },
+  milionerzy: { name: "Milionerzy Party", emoji: "💰", desc: "Drabinka ze stawkami" },
+  szalenstwo: { name: "Szaleństwo Pytania", emoji: "🍻", desc: "Szalone pytania" },
+  krol: { name: "Król Imprezy", emoji: "👑", desc: "Wyzwania na turę" },
+  filmowy: { name: "Filmowy Kwak", emoji: "🎬", desc: "Filmowe scenki" },
+};
+
+// Formatowanie kwot (np. 1 000 000 zł)
+const money = (n) => `${(n || 0).toLocaleString("pl-PL")} zł`;
+
+// Gry oparte o turę (kolejność graczy + głosowanie)
+const isTurnGame = (t) =>
+  ["prawda", "szalenstwo", "krol", "filmowy"].includes(t);
+
+// Etykiety kart (prompt.type -> wygląd)
+const PROMPT_BADGES = {
+  truth: { emoji: "🟣", label: "PRAWDA", className: "truth" },
+  dare: { emoji: "🔥", label: "WYZWANIE", className: "dare" },
+  szalenstwo: { emoji: "🍻", label: "SZALEŃSTWO PYTANIA", className: "truth" },
+  krol: { emoji: "👑", label: "KRÓL IMPREZY", className: "dare" },
+  filmowy: { emoji: "🎬", label: "FILMOWY KWAK", className: "truth" },
+};
 
 export default function Host() {
   const socket = useSocket();
@@ -32,12 +63,13 @@ export default function Host() {
   const [showQuestion, setShowQuestion] = useState(true);
   const [buzzerTimeLeft, setBuzzerTimeLeft] = useState(0);
   const [connected, setConnected] = useState(socket.connected);
+  const [loadingVideo] = useState(() => randomOf(LOADING_VIDEOS));
+
+
   const [startError, setStartError] = useState("");
 
   // --- Prawda czy Wyzwanie ---
-  const [gameType, setGameType] = useState(
-    searchParams.get("game") === "prawda" ? "prawda" : "quiz"
-  );
+  const [gameType, setGameType] = useState(searchParams.get("game") || "quiz");
   const [prawdaLevel, setPrawdaLevel] = useState("grzeczne");
   const [prawdaRounds, setPrawdaRounds] = useState(2);
   const [turnInfo, setTurnInfo] = useState(null);
@@ -45,6 +77,32 @@ export default function Host() {
   const [skipInfo, setSkipInfo] = useState(null);
   const [voteProgress, setVoteProgress] = useState(null);
   const [voteResult, setVoteResult] = useState(null);
+
+  // --- Szybki Quiz ---
+  const [rapidProgress, setRapidProgress] = useState(null);
+  const [rapidResult, setRapidResult] = useState(null);
+
+  // --- Nigdy Przenigdy ---
+  const [nigdyPrompt, setNigdyPrompt] = useState(null);
+  const [nigdyProgress, setNigdyProgress] = useState(null);
+  const [nigdyReveal, setNigdyReveal] = useState(null);
+
+  // --- Kto Bardziej? ---
+  const [ktoPrompt, setKtoPrompt] = useState(null);
+  const [ktoProgress, setKtoProgress] = useState(null);
+  const [ktoReveal, setKtoReveal] = useState(null);
+
+  // --- Memy Rządzą ---
+  const [memyPrompt, setMemyPrompt] = useState(null);
+  const [memyProgress, setMemyProgress] = useState(null);
+  const [memyVoteRequest, setMemyVoteRequest] = useState(null);
+  const [memyResult, setMemyResult] = useState(null);
+  const [memyNeedMore, setMemyNeedMore] = useState(null);
+
+  // --- Milionerzy Party ---
+  const [milionerzyQuestion, setMilionerzyQuestion] = useState(null);
+  const [milionerzyProgress, setMilionerzyProgress] = useState(null);
+  const [milionerzyResult, setMilionerzyResult] = useState(null);
 
   const roundRef = useRef(round);
   roundRef.current = round;
@@ -155,8 +213,10 @@ export default function Host() {
       setPlayers(playerList);
     });
 
-    socket.on("game-started", () => {
-      // Game status will change when greeting comes
+    socket.on("game-started", ({ gameType: gt }) => {
+      if (gt === "quiz" || gt === "prawda") return; // greeting / turn-update ustawią status
+      setGameStatus("round");
+      setCurrentQuestion(null);
     });
 
     socket.on("greeting", ({ text }) => {
@@ -263,6 +323,83 @@ export default function Host() {
       setVoteProgress(null);
     });
 
+    // --- Szybki Quiz ---
+    socket.on("rapid-answered", ({ answeredCount, total }) => {
+      setRapidProgress({ answeredCount, total });
+    });
+    socket.on("rapid-result", (result) => {
+      setRapidResult(result);
+      setRapidProgress(null);
+    });
+
+    // --- Nigdy Przenigdy ---
+    socket.on("nigdy-prompt", (p) => {
+      setNigdyPrompt(p);
+      setNigdyProgress(null);
+      setNigdyReveal(null);
+      speakText(p.prompt);
+    });
+    socket.on("nigdy-answered", ({ answeredCount, total }) => {
+      setNigdyProgress({ answeredCount, total });
+    });
+    socket.on("nigdy-reveal", (r) => {
+      setNigdyReveal(r);
+      setNigdyProgress(null);
+    });
+
+    // --- Kto Bardziej? ---
+    socket.on("kto-prompt", (p) => {
+      setKtoPrompt(p);
+      setKtoProgress(null);
+      setKtoReveal(null);
+      speakText(p.prompt);
+    });
+    socket.on("kto-voted", ({ votedCount, total }) => {
+      setKtoProgress({ votedCount, total });
+    });
+    socket.on("kto-reveal", (r) => {
+      setKtoReveal(r);
+      setKtoProgress(null);
+    });
+
+    // --- Memy Rządzą ---
+    socket.on("memy-prompt", (p) => {
+      setMemyPrompt(p);
+      setMemyProgress(null);
+      setMemyVoteRequest(null);
+      setMemyResult(null);
+      setMemyNeedMore(null);
+    });
+    socket.on("memy-caption-update", ({ captionCount, total }) => {
+      setMemyProgress({ captionCount, total });
+    });
+    socket.on("memy-vote-request", (req) => {
+      setMemyVoteRequest(req);
+    });
+    socket.on("memy-result", (r) => {
+      setMemyResult(r);
+      setMemyVoteRequest(null);
+      setMemyProgress(null);
+    });
+    socket.on("memy-need-more", ({ count }) => {
+      setMemyNeedMore(count);
+    });
+
+    // --- Milionerzy Party ---
+    socket.on("milionerzy-question", (q) => {
+      setMilionerzyQuestion(q);
+      setMilionerzyProgress(null);
+      setMilionerzyResult(null);
+      speakText(q.question);
+    });
+    socket.on("milionerzy-answered", ({ answeredCount, total }) => {
+      setMilionerzyProgress({ answeredCount, total });
+    });
+    socket.on("milionerzy-result", (r) => {
+      setMilionerzyResult(r);
+      setMilionerzyProgress(null);
+    });
+
     return () => {
       socket.off("game-created");
       socket.off("player-joined");
@@ -285,6 +422,22 @@ export default function Host() {
       socket.off("vote-request");
       socket.off("vote-update");
       socket.off("vote-result");
+      socket.off("rapid-answered");
+      socket.off("rapid-result");
+      socket.off("nigdy-prompt");
+      socket.off("nigdy-answered");
+      socket.off("nigdy-reveal");
+      socket.off("kto-prompt");
+      socket.off("kto-voted");
+      socket.off("kto-reveal");
+      socket.off("memy-prompt");
+      socket.off("memy-caption-update");
+      socket.off("memy-vote-request");
+      socket.off("memy-result");
+      socket.off("memy-need-more");
+      socket.off("milionerzy-question");
+      socket.off("milionerzy-answered");
+      socket.off("milionerzy-result");
     };
   }, [socket]);
 
@@ -306,6 +459,63 @@ export default function Host() {
 
   const finalizeVote = () => {
     socket.emit("finalize-vote", { code: gameCode });
+  };
+
+  // Kolejna karta w grach tur-bazowanych (szalenstwo / krol / filmowy)
+  const nextCard = () => {
+    socket.emit("next-card", { code: gameCode });
+  };
+
+  // --- Szybki Quiz ---
+  const rapidReveal = () => {
+    socket.emit("rapid-reveal", { code: gameCode });
+  };
+  const rapidNextQuestion = () => {
+    setRapidResult(null);
+    setRapidProgress(null);
+    socket.emit("next-question", { code: gameCode });
+  };
+
+  // --- Nigdy Przenigdy ---
+  const nigdyNext = () => {
+    setNigdyReveal(null);
+    socket.emit("nigdy-next", { code: gameCode });
+  };
+  const nigdyRevealRound = () => {
+    socket.emit("nigdy-reveal", { code: gameCode });
+  };
+
+  // --- Kto Bardziej? ---
+  const ktoNext = () => {
+    setKtoReveal(null);
+    socket.emit("kto-next", { code: gameCode });
+  };
+  const ktoRevealRound = () => {
+    socket.emit("kto-reveal", { code: gameCode });
+  };
+
+  // --- Memy Rządzą ---
+  const memyNext = () => {
+    setMemyResult(null);
+    setMemyNeedMore(null);
+    socket.emit("memy-next", { code: gameCode });
+  };
+  const memyStartVote = () => {
+    setMemyNeedMore(null);
+    socket.emit("memy-start-vote", { code: gameCode });
+  };
+  const memyRevealRound = () => {
+    socket.emit("memy-reveal", { code: gameCode });
+  };
+
+  // --- Milionerzy Party ---
+  const milionerzyNext = () => {
+    setMilionerzyResult(null);
+    setMilionerzyProgress(null);
+    socket.emit("milionerzy-next", { code: gameCode });
+  };
+  const milionerzyReveal = () => {
+    socket.emit("milionerzy-reveal", { code: gameCode });
   };
 
   const nextQuestion = () => {
@@ -382,26 +592,19 @@ export default function Host() {
                   marginBottom: "30px",
                 }}
               >
-                <button
-                  className={`game-type-card ${
-                    gameType === "quiz" ? "selected" : ""
-                  }`}
-                  onClick={() => setGameType("quiz")}
-                >
-                  <span className="game-type-emoji">🧠</span>
-                  <span className="game-type-name">Kwak Kwiz</span>
-                  <span className="game-type-desc">Quiz z buzzerem</span>
-                </button>
-                <button
-                  className={`game-type-card ${
-                    gameType === "prawda" ? "selected" : ""
-                  }`}
-                  onClick={() => setGameType("prawda")}
-                >
-                  <span className="game-type-emoji">🔥</span>
-                  <span className="game-type-name">Prawda czy Wyzwanie</span>
-                  <span className="game-type-desc">Karty + głosowanie</span>
-                </button>
+                {Object.entries(GAME_META).map(([key, meta]) => (
+                  <button
+                    key={key}
+                    className={`game-type-card ${
+                      gameType === key ? "selected" : ""
+                    }`}
+                    onClick={() => setGameType(key)}
+                  >
+                    <span className="game-type-emoji">{meta.emoji}</span>
+                    <span className="game-type-name">{meta.name}</span>
+                    <span className="game-type-desc">{meta.desc}</span>
+                  </button>
+                ))}
               </div>
             </>
           )}
@@ -414,7 +617,9 @@ export default function Host() {
                 fontSize: "1.6rem",
               }}
             >
-              {gameType === "prawda" ? "🔥 Prawda czy Wyzwanie" : "🧠 Kwak Kwiz"}
+              {GAME_META[gameType]
+                ? `${GAME_META[gameType].emoji} ${GAME_META[gameType].name}`
+                : "🧠 Kwak Kwiz"}
             </h2>
           )}
 
@@ -506,6 +711,7 @@ export default function Host() {
 
       {gameCode && gameStatus === "lobby" && (
         <>
+          <VideoOverlay variant="background" src={loadingVideo} loop dim />
           <div className="game-code-section">
             <div className="game-code-label">Kod gry</div>
             <div className="game-code">{gameCode}</div>
@@ -573,8 +779,8 @@ export default function Host() {
         </>
       )}
 
-      {/* PRAWDA CZY WYZWANIE — ROZGRYWKA */}
-      {gameType === "prawda" && gameStatus === "round" && (
+      {/* GRY TUR-BAZOWANE (prawda / szalenstwo / krol / filmowy) */}
+      {isTurnGame(gameType) && gameStatus === "round" && (
         <div className="prawda-host fade-in">
           <Scoreboard scores={scores} showLives={false} />
 
@@ -591,9 +797,21 @@ export default function Host() {
 
           {!prompt && !skipInfo && !voteProgress && !voteResult && turnInfo && (
             <div className="prawda-info">
-              <p>
-                Czekam, aż <strong>{turnInfo.playerName}</strong> wybierze…
-              </p>
+              {gameType === "prawda" ? (
+                <p>
+                  Czekam, aż <strong>{turnInfo.playerName}</strong> wybierze…
+                </p>
+              ) : (
+                <>
+                  <p>
+                    Kolej <strong>{turnInfo.playerName}</strong>. Pokaż kartę, aby
+                    zacząć.
+                  </p>
+                  <button className="btn btn-next" onClick={nextCard}>
+                    Pokaż kartę
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -606,11 +824,12 @@ export default function Host() {
           {prompt && (
             <div
               className={`prompt-card ${
-                prompt.type === "truth" ? "truth" : "dare"
+                PROMPT_BADGES[prompt.type]?.className || "truth"
               }`}
             >
               <div className="prompt-badge">
-                {prompt.type === "truth" ? "🟣 PRAWDA" : "🔥 WYZWANIE"}
+                {PROMPT_BADGES[prompt.type]?.emoji}{" "}
+                {PROMPT_BADGES[prompt.type]?.label}
               </div>
               <p className="prompt-text">{prompt.text}</p>
               <p className="prompt-player">Dla: {prompt.playerName}</p>
@@ -658,8 +877,411 @@ export default function Host() {
         </div>
       )}
 
+      {/* SZYBKI QUIZ — ROZGRYWKA */}
+      {gameType === "quiz-rapid" && gameStatus === "round" && (
+        <div className="prawda-host fade-in">
+          <Scoreboard scores={scores} showLives={false} />
+
+          {!currentQuestion && !rapidResult && (
+            <div style={{ textAlign: "center", marginTop: "30px" }}>
+              <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>
+                Wszyscy gracze odpowiadają jednocześnie na telefonach.
+              </p>
+              <button className="btn btn-start" onClick={rapidNextQuestion}>
+                Pokaż pierwsze pytanie
+              </button>
+            </div>
+          )}
+
+          {currentQuestion && (
+            <div className="question-section-host fade-in">
+              <p className="question-text-host">{currentQuestion.question}</p>
+              <div className="answers-grid-host">
+                {currentQuestion.answers.map((answer, i) => {
+                  let className = "answer-cell";
+                  if (rapidResult && i === rapidResult.correctIndex) {
+                    className += " correct-highlight";
+                  }
+                  const labels = ["A", "B", "C", "D"];
+                  return (
+                    <div key={i} className={className}>
+                      <strong>{labels[i]}:</strong> {answer}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {currentQuestion && !rapidResult && (
+            <div className="controls-section">
+              {rapidProgress ? (
+                <p style={{ color: "var(--text-secondary)" }}>
+                  Odpowiedziało: {rapidProgress.answeredCount} / {rapidProgress.total}
+                </p>
+              ) : (
+                <p style={{ color: "var(--text-secondary)" }}>
+                  Czekam na odpowiedzi graczy…
+                </p>
+              )}
+              <button className="btn btn-next" onClick={rapidReveal}>
+                Odkryj odpowiedzi
+              </button>
+            </div>
+          )}
+
+          {rapidResult && (
+            <div className="vote-result-panel fade-in">
+              <p className="vote-result-title">
+                ✅ Poprawna: {rapidResult.correctAnswer}
+              </p>
+              <div className="vote-breakdown">
+                {rapidResult.results.map((r) => (
+                  <span key={r.playerId} className="vote-chip">
+                    {r.correct ? "✅" : "❌"} {r.playerName}
+                  </span>
+                ))}
+              </div>
+              {!rapidResult.gameOver ? (
+                <button
+                  className="btn btn-next"
+                  style={{ marginTop: "15px" }}
+                  onClick={rapidNextQuestion}
+                >
+                  Następne pytanie
+                </button>
+              ) : (
+                <p style={{ marginTop: "15px", color: "var(--accent-gold)" }}>
+                  To było ostatnie pytanie!
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* NIGDY PRZENIGDY — ROZGRYWKA */}
+      {gameType === "nigdy" && gameStatus === "round" && (
+        <div className="prawda-host fade-in">
+          <Scoreboard scores={scores} showLives={false} />
+
+          {!nigdyPrompt && !nigdyReveal && (
+            <div style={{ textAlign: "center", marginTop: "30px" }}>
+              <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>
+                Czytaj karty na głos. Gracze przyznają się (TAK/NIE) na telefonach.
+              </p>
+              <button className="btn btn-start" onClick={nigdyNext}>
+                Pokaż pierwszą kartę
+              </button>
+            </div>
+          )}
+
+          {nigdyPrompt && (
+            <div className="prompt-card truth">
+              <div className="prompt-badge">💋 NIGDY PRZENIGDY</div>
+              <p className="prompt-text">{nigdyPrompt.prompt}</p>
+              <p className="prompt-player">
+                Runda {nigdyPrompt.round} / {nigdyPrompt.total}
+              </p>
+            </div>
+          )}
+
+          {nigdyProgress && nigdyPrompt && !nigdyReveal && (
+            <p style={{ color: "var(--text-secondary)", textAlign: "center" }}>
+              Przyznało się: {nigdyProgress.answeredCount} / {nigdyProgress.total}
+            </p>
+          )}
+
+          {nigdyPrompt && !nigdyReveal && (
+            <div className="controls-section">
+              <button className="btn btn-next" onClick={nigdyRevealRound}>
+                Odkryj, kto to robił
+              </button>
+            </div>
+          )}
+
+          {nigdyReveal && (
+            <div className="vote-result-panel fade-in">
+              <p className="vote-result-title">„{nigdyReveal.prompt}"</p>
+              <p style={{ marginTop: "10px", color: "var(--red-wrong)" }}>
+                ✅ TAK ({nigdyReveal.yesCount}):{" "}
+                {nigdyReveal.yesNames.join(", ") || "—"}
+              </p>
+              <p style={{ marginTop: "5px", color: "var(--text-secondary)" }}>
+                ❌ NIE ({nigdyReveal.noCount}):{" "}
+                {nigdyReveal.noNames.join(", ") || "—"}
+              </p>
+              <button
+                className="btn btn-next"
+                style={{ marginTop: "15px" }}
+                onClick={nigdyNext}
+              >
+                Następna karta
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* KTO BARDZIEJ? — ROZGRYWKA */}
+      {gameType === "kto-bardziej" && gameStatus === "round" && (
+        <div className="prawda-host fade-in">
+          <Scoreboard scores={scores} showLives={false} />
+
+          {!ktoPrompt && !ktoReveal && (
+            <div style={{ textAlign: "center", marginTop: "30px" }}>
+              <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>
+                Gracze głosują, kto z nich najbardziej pasuje do opisu.
+              </p>
+              <button className="btn btn-start" onClick={ktoNext}>
+                Pokaż pierwszą kartę
+              </button>
+            </div>
+          )}
+
+          {ktoPrompt && (
+            <div className="prompt-card dare">
+              <div className="prompt-badge">🕺 KTO BARDZIEJ?</div>
+              <p className="prompt-text">{ktoPrompt.prompt}</p>
+              <p className="prompt-player">
+                Runda {ktoPrompt.round} / {ktoPrompt.total}
+              </p>
+            </div>
+          )}
+
+          {ktoProgress && ktoPrompt && !ktoReveal && (
+            <p style={{ color: "var(--text-secondary)", textAlign: "center" }}>
+              Głosów: {ktoProgress.votedCount} / {ktoProgress.total}
+            </p>
+          )}
+
+          {ktoPrompt && !ktoReveal && (
+            <div className="controls-section">
+              <button className="btn btn-next" onClick={ktoRevealRound}>
+                Podlicz głosy
+              </button>
+            </div>
+          )}
+
+          {ktoReveal && (
+            <div className="vote-result-panel fade-in">
+              <p className="vote-result-title">
+                {ktoReveal.winnerName
+                  ? `🏆 ${ktoReveal.winnerName} wygrywa rundę!`
+                  : "Brak głosów"}
+              </p>
+              <p style={{ color: "var(--text-secondary)", marginTop: "5px" }}>
+                „{ktoReveal.prompt}"
+              </p>
+              <div className="vote-breakdown">
+                {Object.entries(ktoReveal.counts)
+                  .filter(([, c]) => c > 0)
+                  .map(([pid, c]) => {
+                    const p = players.find((x) => x.id === pid);
+                    return (
+                      <span key={pid} className="vote-chip">
+                        {p?.name || "?"}: {c}
+                      </span>
+                    );
+                  })}
+              </div>
+              <button
+                className="btn btn-next"
+                style={{ marginTop: "15px" }}
+                onClick={ktoNext}
+              >
+                Następna karta
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MEMY RZĄDZĄ — ROZGRYWKA */}
+      {gameType === "memy" && gameStatus === "round" && (
+        <div className="prawda-host fade-in">
+          <Scoreboard scores={scores} showLives={false} />
+
+          {!memyPrompt && !memyResult && (
+            <div style={{ textAlign: "center", marginTop: "30px" }}>
+              <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>
+                Pokaż mema. Gracze wpisują najlepszy podpis, a potem głosujemy.
+              </p>
+              <button className="btn btn-start" onClick={memyNext}>
+                Pokaż pierwszego mema
+              </button>
+            </div>
+          )}
+
+          {memyPrompt && (
+            <div className="prompt-card">
+              <div className="prompt-badge">🤣 MEMY RZĄDZĄ</div>
+              <p className="prompt-text" style={{ fontSize: "4rem", lineHeight: 1 }}>
+                {memyPrompt.meme.emoji}
+              </p>
+              <p className="prompt-text">{memyPrompt.meme.text}</p>
+              <p className="prompt-player">
+                Runda {memyPrompt.round} / {memyPrompt.total}
+              </p>
+            </div>
+          )}
+
+          {memyProgress && memyPrompt && !memyVoteRequest && !memyResult && (
+            <p style={{ color: "var(--text-secondary)", textAlign: "center" }}>
+              Podpisów: {memyProgress.captionCount} / {memyProgress.total}
+            </p>
+          )}
+
+          {memyNeedMore !== null && (
+            <p style={{ color: "var(--red-wrong)", textAlign: "center" }}>
+              Za mało podpisów (masz {memyNeedMore}) — poczekaj na więcej.
+            </p>
+          )}
+
+          {memyPrompt && !memyVoteRequest && !memyResult && (
+            <div className="controls-section">
+              <button className="btn btn-next" onClick={memyStartVote}>
+                Rozpocznij głosowanie
+              </button>
+            </div>
+          )}
+
+          {memyVoteRequest && (
+            <div className="vote-panel">
+              <p className="vote-title">Głosowanie na najlepszy podpis…</p>
+              {memyVoteRequest.captions.map((c) => (
+                <div key={c.playerId} className="prompt-card">
+                  <p className="prompt-text">„{c.text}"</p>
+                  <p className="prompt-player">— {c.playerName}</p>
+                </div>
+              ))}
+              <button className="btn btn-elimination" onClick={memyRevealRound}>
+                Podlicz głosy
+              </button>
+            </div>
+          )}
+
+          {memyResult && (
+            <div className="vote-result-panel fade-in">
+              <p className="vote-result-title">
+                {memyResult.winnerName
+                  ? `🏆 ${memyResult.winnerName} +10 pkt!`
+                  : "Brak zwycięzcy"}
+              </p>
+              {memyResult.winnerCaption && (
+                <p style={{ color: "var(--accent-gold)", marginTop: "5px" }}>
+                  „{memyResult.winnerCaption}"
+                </p>
+              )}
+              <button
+                className="btn btn-next"
+                style={{ marginTop: "15px" }}
+                onClick={memyNext}
+              >
+                Następny mem
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MILIONERZY PARTY — ROZGRYWKA */}
+      {gameType === "milionerzy" && gameStatus === "round" && (
+        <div className="prawda-host fade-in">
+          <Scoreboard scores={scores} showLives={false} />
+
+          {!milionerzyQuestion && !milionerzyResult && (
+            <div style={{ textAlign: "center", marginTop: "30px" }}>
+              <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>
+                Drabinka pytań z rosnącymi stawkami. Gracze grają równolegle.
+              </p>
+              <button className="btn btn-start" onClick={milionerzyNext}>
+                Pokaż pierwsze pytanie
+              </button>
+            </div>
+          )}
+
+          {milionerzyQuestion && (
+            <div className="question-section-host fade-in">
+              <p className="question-text-host">{milionerzyQuestion.question}</p>
+              <p
+                style={{
+                  color: "var(--accent-gold)",
+                  fontSize: "1.5rem",
+                  fontWeight: "bold",
+                  marginTop: "10px",
+                }}
+              >
+                💰 {money(milionerzyQuestion.prize)}
+                {milionerzyQuestion.guaranteed ? " — PRÓG GWARANTOWANY" : ""}
+              </p>
+              <div className="answers-grid-host">
+                {milionerzyQuestion.answers.map((answer, i) => {
+                  let className = "answer-cell";
+                  if (milionerzyResult && i === milionerzyResult.correctIndex) {
+                    className += " correct-highlight";
+                  }
+                  const labels = ["A", "B", "C", "D"];
+                  return (
+                    <div key={i} className={className}>
+                      <strong>{labels[i]}:</strong> {answer}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {milionerzyQuestion && !milionerzyResult && (
+            <div className="controls-section">
+              {milionerzyProgress ? (
+                <p style={{ color: "var(--text-secondary)" }}>
+                  Odpowiedziało: {milionerzyProgress.answeredCount} /{" "}
+                  {milionerzyProgress.total}
+                </p>
+              ) : (
+                <p style={{ color: "var(--text-secondary)" }}>
+                  Czekam na odpowiedzi graczy…
+                </p>
+              )}
+              <button className="btn btn-next" onClick={milionerzyReveal}>
+                Odkryj odpowiedzi
+              </button>
+            </div>
+          )}
+
+          {milionerzyResult && (
+            <div className="vote-result-panel fade-in">
+              <p className="vote-result-title">
+                ✅ Poprawna: {milionerzyResult.correctAnswer}
+              </p>
+              <div className="vote-breakdown">
+                {milionerzyResult.results.map((r) => (
+                  <span key={r.playerId} className="vote-chip">
+                    {r.eliminated ? "❌" : "✅"} {r.playerName}: {money(r.prize)}
+                  </span>
+                ))}
+              </div>
+              {!milionerzyResult.gameOver ? (
+                <button
+                  className="btn btn-next"
+                  style={{ marginTop: "15px" }}
+                  onClick={milionerzyNext}
+                >
+                  Następne pytanie
+                </button>
+              ) : (
+                <p style={{ marginTop: "15px", color: "var(--accent-gold)" }}>
+                  Koniec drabinki!
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* GREETING */}
-      {gameType !== "prawda" && gameStatus === "greeting" && (
+      {gameType === "quiz" && gameStatus === "greeting" && (
         <>
           <div className="greeting-section">
             <p className="greeting-text">{greetingText}</p>
@@ -674,7 +1296,7 @@ export default function Host() {
       )}
 
       {/* ROUND / FINALE QUESTION */}
-      {gameType !== "prawda" &&
+      {gameType === "quiz" &&
         (gameStatus === "round" || gameStatus === "finale") &&
         currentQuestion && (
         <>
@@ -786,7 +1408,7 @@ export default function Host() {
       )}
 
       {/* FINALE READY – waiting for first question */}
-      {gameType !== "prawda" && gameStatus === "finale" && !currentQuestion && (
+      {gameType === "quiz" && gameStatus === "finale" && !currentQuestion && (
         <>
           <Scoreboard scores={scores} />
           <div style={{ textAlign: "center", marginTop: "30px" }}>
@@ -804,7 +1426,7 @@ export default function Host() {
       )}
 
       {/* ELIMINATION */}
-      {gameType !== "prawda" && gameStatus === "elimination" && (
+      {gameType === "quiz" && gameStatus === "elimination" && (
         <>
           <Scoreboard scores={scores} />
           <div style={{ textAlign: "center", marginTop: "20px" }}>

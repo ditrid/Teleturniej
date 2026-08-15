@@ -73,6 +73,7 @@ export const games = [
   {
     id: 101,
     title: "KTO\nBARDZIEJ?",
+    gameType: "kto-bardziej",
     image: ktoBardziej,
     categoryId: "druzynowe",
     categoryName: "Drużynowe",
@@ -93,6 +94,7 @@ export const games = [
   {
     id: 102,
     title: "SZALEŃSTWO\nPYTANIA",
+    gameType: "szalenstwo",
     image: szalonePytania,
     categoryId: "alkoholowe",
     categoryName: "Alkoholowe",
@@ -133,6 +135,7 @@ export const games = [
   {
     id: 104,
     title: "NIGDY\nPRZENIGDY",
+    gameType: "nigdy",
     image: nigdyPrzenigdy,
     categoryId: "prawda-wyzwanie",
     categoryName: "Prawda czy Wyzwanie",
@@ -153,6 +156,7 @@ export const games = [
   {
     id: 105,
     title: "KRÓL\nIMPREZY",
+    gameType: "krol",
     image: krolImprezy,
     categoryId: "klasyki",
     categoryName: "Klasyki",
@@ -210,6 +214,7 @@ export const games = [
   {
     id: 2,
     title: "Milionerzy Party",
+    gameType: "milionerzy",
     categoryId: "klasyki",
     categoryName: "Klasyki",
     categoryIcon: "🏆",
@@ -242,6 +247,7 @@ export const games = [
   {
     id: 8,
     title: "Memy Rządzą",
+    gameType: "memy",
     categoryId: "szybkie",
     categoryName: "Szybkie gry",
     categoryIcon: "⚡",
@@ -258,6 +264,7 @@ export const games = [
   {
     id: 10,
     title: "Filmowy Kwak",
+    gameType: "filmowy",
     categoryId: "dla-par",
     categoryName: "Dla par",
     categoryIcon: "❤️",
@@ -274,6 +281,7 @@ export const games = [
   {
     id: 4,
     title: "Szybki Quiz",
+    gameType: "quiz-rapid",
     categoryId: "szybkie",
     categoryName: "Szybkie gry",
     categoryIcon: "⚡",

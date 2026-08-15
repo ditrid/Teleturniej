@@ -3,6 +3,7 @@ import { SocketProvider } from "./context/SocketContext";
 import { QuickCodeProvider } from "./context/QuickCodeContext";
 import { AuthProvider } from "./context/AuthContext";
 import Layout from "./components/Layout";
+import IntroVideo from "./components/IntroVideo";
 import Home from "./pages/Home";
 import Join from "./pages/Join";
 import Host from "./pages/Host";
@@ -15,7 +16,9 @@ import GameDetail from "./pages/GameDetail";
 
 export default function App() {
   return (
-    <SocketProvider>
+    <>
+      <IntroVideo />
+      <SocketProvider>
       <QuickCodeProvider>
         <AuthProvider>
           <BrowserRouter>
@@ -40,7 +43,8 @@ export default function App() {
           </BrowserRouter>
         </AuthProvider>
       </QuickCodeProvider>
-    </SocketProvider>
+      </SocketProvider>
+    </>
   );
 }
 
