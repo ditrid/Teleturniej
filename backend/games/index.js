@@ -13,6 +13,7 @@ const flipCup = require("./flip-cup");
 const melodia = require("./melodia");
 const haslo = require("./haslo");
 const karaoke = require("./karaoke");
+const szpieg = require("./szpieg");
 
 const registry = {};
 
@@ -50,5 +51,6 @@ registerGame(flipCup);
 registerGame(melodia);
 registerGame(haslo);
 registerGame(karaoke);
+registerGame(szpieg);
 
 module.exports = { registerGame, getGameModule, listGames };

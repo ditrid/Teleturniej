@@ -1,6 +1,31 @@
+import { useEffect, useRef, useState } from "react";
 import "../styles/theme.css";
 
 export default function Scoreboard({ scores, showLives = true }) {
+  const prevScoresRef = useRef({});
+  const [flash, setFlash] = useState({});
+
+  // Podświetla gracza, którego wynik się zmienił (zielono = wzrost, czerwono = spadek).
+  useEffect(() => {
+    const changed = {};
+    (scores || []).forEach((p) => {
+      const prev = prevScoresRef.current[p.id];
+      if (prev !== undefined && prev !== p.score) {
+        changed[p.id] = p.score > prev ? "up" : "down";
+      }
+    });
+    const map = {};
+    (scores || []).forEach((p) => {
+      map[p.id] = p.score;
+    });
+    prevScoresRef.current = map;
+    if (Object.keys(changed).length > 0) {
+      setFlash(changed);
+      const t = setTimeout(() => setFlash({}), 900);
+      return () => clearTimeout(t);
+    }
+  }, [scores]);
+
   if (!scores || scores.length === 0) {
     return null;
   }
@@ -44,6 +69,7 @@ export default function Scoreboard({ scores, showLives = true }) {
                 index === 0
                   ? "1px solid rgba(255, 212, 0, 0.3)"
                   : "1px solid transparent",
+              transition: "background 0.3s ease",
             }}
           >
             <span
@@ -104,14 +130,23 @@ export default function Scoreboard({ scores, showLives = true }) {
               </div>
             )}
             <span
+              key={player.score}
               style={{
                 fontWeight: "bold",
-                color: "var(--accent-gold)",
+                color:
+                  flash[player.id] === "up"
+                    ? "#22c55e"
+                    : flash[player.id] === "down"
+                      ? "#ef4444"
+                      : "var(--accent-gold)",
                 fontSize: "1.1rem",
                 minWidth: "50px",
                 textAlign: "right",
+                transition: "color 0.4s ease, transform 0.3s ease",
+                transform: flash[player.id] ? "scale(1.15)" : "scale(1)",
               }}
             >
+              {flash[player.id] === "up" ? "▲ " : flash[player.id] === "down" ? "▼ " : ""}
               {player.score} pkt
             </span>
           </div>

@@ -1,0 +1,262 @@
+/* KWAKOUT — motyw gry "Szpieg" (klon Spyfall).
+   Klimat "tajnej teczki / agentury": ciemny granat + krwista czerwień,
+   pieczątki "TAJNE", font maszyny do pisania, elementy "redacted". */
+
+:root {
+  --spy-red: #ef4444;
+  --spy-red-dark: #7f1d1d;
+  --spy-ink: #0b1120;
+  --spy-navy: #0f172a;
+  --spy-paper: #f5f0e6;
+  --spy-type: "Courier New", "Lucida Console", monospace;
+}
+
+/* Karta-akta (dossier) */
+.spy-dossier {
+  position: relative;
+  background: var(--spy-paper);
+  color: #1a1a1a;
+  border: 2px solid #111;
+  border-radius: 10px;
+  padding: 26px 20px 22px;
+  box-shadow:
+    0 0 0 3px var(--spy-red),
+    0 12px 40px rgba(0, 0, 0, 0.55);
+  font-family: var(--spy-type);
+  overflow: hidden;
+}
+.spy-dossier::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px dashed rgba(127, 29, 29, 0.55);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* Pieczątka "TAJNE" */
+.spy-stamp {
+  display: inline-block;
+  border: 3px double var(--spy-red);
+  color: var(--spy-red);
+  padding: 4px 12px;
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  transform: rotate(-6deg);
+  border-radius: 4px;
+  font-family: var(--spy-type);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.spy-stamp.small {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  letter-spacing: 0.18em;
+  transform: rotate(-3deg);
+}
+
+.spy-location-emoji {
+  font-size: 3.4rem;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+}
+
+.spy-location-name {
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #111;
+  margin: 8px 0 2px;
+}
+
+.spy-role-label {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--spy-red-dark);
+}
+
+.spy-role-emoji {
+  font-size: 2.4rem;
+}
+
+/* Czarna "redakcja" (zakryty tekst) */
+.spy-redacted {
+  display: inline-block;
+  background: #111;
+  color: transparent;
+  border-radius: 3px;
+  padding: 0 6px;
+  user-select: none;
+}
+
+/* Odliczanie */
+.spy-timer {
+  font-family: var(--spy-type);
+  font-size: 3.6rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: var(--accent-gold-light, #ffd400);
+  text-shadow: 0 0 24px rgba(255, 212, 0, 0.35);
+}
+.spy-timer.urgent {
+  color: var(--spy-red);
+  text-shadow: 0 0 26px rgba(239, 68, 68, 0.7);
+  animation: spyPulse 0.9s ease-in-out infinite;
+}
+@keyframes spyPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+/* Przyciski akcji Szpiega */
+.spy-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+}
+.spy-btn {
+  font-family: var(--spy-type);
+  font-weight: 700;
+  border: 2px solid #111;
+  border-radius: 8px;
+  padding: 13px 16px;
+  cursor: pointer;
+  font-size: 1rem;
+  background: #fff;
+  color: #111;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.spy-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+.spy-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.spy-btn-panic {
+  background: var(--spy-red);
+  color: #fff;
+  border-color: var(--spy-red-dark);
+  letter-spacing: 0.05em;
+}
+
+/* Ukryty przycisk Szpiega (dyskretny) */
+.spy-btn-shot {
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.82rem;
+  padding: 8px 10px;
+  letter-spacing: 0.2em;
+}
+.spy-btn-shot:hover { color: #fff; border-color: rgba(255,255,255,0.6); }
+
+/* Wyszukiwarka lokalizacji */
+.spy-search {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid #111;
+  border-radius: 8px;
+  font-family: var(--spy-type);
+  font-size: 1rem;
+  background: #fff;
+  color: #111;
+}
+
+/* Siatka lokalizacji (Strzał Życia) */
+.spy-loc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.spy-loc-btn {
+  font-family: var(--spy-type);
+  text-align: left;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  transition: background 0.1s ease;
+}
+.spy-loc-btn:hover { background: #ffe8e8; border-color: var(--spy-red); }
+
+/* Ostrzeżenie przy strzale */
+.spy-warning {
+  background: #fff1f1;
+  border: 2px solid var(--spy-red);
+  color: var(--spy-red-dark);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: var(--spy-type);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* Głosowanie (Panic Button) */
+.spy-vote-btns {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+.spy-vote-yes {
+  background: #16a34a;
+  color: #fff;
+  border-color: #14532d;
+}
+.spy-vote-no {
+  background: #dc2626;
+  color: #fff;
+  border-color: #7f1d1d;
+}
+
+/* Panel zasad / punktacji */
+.spy-rules {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  border-radius: var(--radius, 12px);
+  padding: 18px;
+  color: var(--text-secondary, #cbd5e1);
+  font-size: 0.92rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.spy-rules h3 {
+  color: var(--accent-gold-light, #ffd400);
+  margin: 12px 0 6px;
+  font-family: var(--spy-type);
+}
+.spy-rules table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.spy-rules th, .spy-rules td {
+  border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+  padding: 6px 8px;
+  text-align: left;
+}
+.spy-rules th { color: #fff; background: rgba(255,255,255,0.05); }
+
+/* Panel rozwiązania rundy */
+.spy-reveal {
+  background: rgba(11, 17, 32, 0.6);
+  border: 2px solid var(--spy-red);
+  border-radius: 12px;
+  padding: 18px;
+  font-family: var(--spy-type);
+}
+.spy-reveal .role-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px dashed rgba(255,255,255,0.12);
+  color: #e5e7eb;
+}
+.spy-reveal .role-row.spy {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fff;
+  font-weight: 700;
+}

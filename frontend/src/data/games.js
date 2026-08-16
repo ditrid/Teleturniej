@@ -331,6 +331,26 @@ export const games = [
     popular: false,
     new: true,
   },
+  {
+    id: 11,
+    title: "SZPIEG",
+    gameType: "szpieg",
+    categoryId: "druzynowe",
+    categoryName: "Drużynowe",
+    categoryIcon: "👥",
+    description: "Blef, dedukcja i psychologiczna walka. Kto z Was jest Szpiegiem?",
+    difficulty: "Średni",
+    players: "3–12 graczy",
+    rating: 4.9,
+    plays: "9,2 tys.",
+    emoji: "🕵️",
+    gradient: "from-slate-700 via-slate-900 to-red-900",
+    borderColor: "#ef4444",
+    badge: "HOT",
+    badgeColor: "bg-red-600",
+    popular: true,
+    new: true,
+  },
 ];
 
 export function getGamesByCategory(categoryId) {

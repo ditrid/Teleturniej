@@ -186,6 +186,9 @@ app.use((req, res, next) => {
   }
 });
 
+// Mapy timerów gry "Szpieg" (klucz = kod gry) — bicie serca i koniec czasu.
+const szpiegTimers = new Map();
+
 io.on("connection", (socket) => {
   console.log("[SERVER] Nowe połączenie:", socket.id);
   console.log(
@@ -197,6 +200,55 @@ io.on("connection", (socket) => {
   const answerTimeouts = {};
 
   const getModule = (game) => (game ? getGameModule(game.gameType) : null);
+
+  // Emituje tajne role gry "Szpieg" indywidualnie do każdego gracza (rola + lokalizacja,
+  // a Szpieg dodatkowo dostaje listę lokalizacji do wyszukiwarki przy Strzale Życia).
+  const emitSzpiegRoles = (code) => {
+    const game = engine.getGame(code);
+    const mod = getModule(game);
+    if (!game || !mod) return;
+    game.players.forEach((p) => {
+      if (p.socketId) {
+        io.to(p.socketId).emit("szpieg-role", mod.getPlayerRole(game, p.id));
+      }
+    });
+  };
+
+  // Planuje bicie serca (ostatnie 10 s) i koniec czasu rundy Szpiega.
+  const scheduleSzpiegTimers = (code, durationSec) => {
+    clearSzpiegTimers(code);
+    const heartbeatMs = Math.max(0, (durationSec - 10) * 1000);
+    const timeupMs = durationSec * 1000;
+    const timers = {};
+    timers.heartbeat = setTimeout(() => {
+      io.to(code).emit("szpieg-heartbeat");
+    }, heartbeatMs);
+    timers.timeup = setTimeout(() => {
+      io.to(code).emit("szpieg-time-up");
+    }, timeupMs);
+    szpiegTimers.set(code, timers);
+  };
+
+  const clearSzpiegTimers = (code) => {
+    const t = szpiegTimers.get(code);
+    if (t) {
+      clearTimeout(t.heartbeat);
+      clearTimeout(t.timeup);
+      szpiegTimers.delete(code);
+    }
+  };
+
+  // Rozstrzyga aktywne oskarżenie w grze Szpieg (wszyscy zagłosowali).
+  const resolveSzpiegPanic = (code) => {
+    const game = engine.getGame(code);
+    const mod = getModule(game);
+    const r = mod && mod.resolvePanic ? mod.resolvePanic(game) : null;
+    if (!r) return;
+    clearSzpiegTimers(code);
+    io.to(code).emit("szpieg-result", r);
+    io.to(code).emit("szpieg-reveal", mod.reveal(game));
+    io.to(code).emit("scores-update", { scores: engine.getScores(code) });
+  };
 
   // Wspólne zakończenie rundy/gry dla gier imprezowych: aktualizacja punktów + koniec gry.
   const sendScoresAndGameOver = (code, result) => {
@@ -301,13 +353,13 @@ io.on("connection", (socket) => {
   });
 
   // Host starts the game (delegacja do modułu gry)
-  socket.on("start-game", ({ code, level, rounds, difficulty } = {}) => {
+  socket.on("start-game", ({ code, level, rounds, difficulty, duration } = {}) => {
     const game = engine.getGame(code);
     if (!game || game.hostId !== socket.id) return;
     const mod = getModule(game);
     if (!mod || !mod.start) return;
 
-    const result = mod.start(game, { level, rounds, difficulty });
+    const result = mod.start(game, { level, rounds, difficulty, duration });
     if (!result || !result.ok) {
       socket.emit("start-error", { message: (result && result.error) || "Nie można rozpocząć gry" });
       return;
@@ -324,6 +376,10 @@ io.on("connection", (socket) => {
     // quiz-rapid / nigdy / kto-bardziej / memy / milionerzy / flip-cup — host sam uruchamia pierwszą rundę.
     if (game.gameType === "flip-cup") {
       io.to(code).emit("flip-state", mod.getState(game));
+    }
+    if (game.gameType === "szpieg") {
+      emitSzpiegRoles(code);
+      io.to(code).emit("szpieg-started", mod.getHostState(game));
     }
   });
 
@@ -882,6 +938,90 @@ io.on("connection", (socket) => {
   });
 
   // Rejoin – player reconnects after page refresh during game
+  // ===================== SZPIEG (SPYFALL) =====================
+
+  // Host uruchamia stoper rundy.
+  socket.on("szpieg-start-timer", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const r = mod && mod.startTimer ? mod.startTimer(game) : null;
+    if (!r) return;
+    io.to(code).emit("szpieg-timer-started", r);
+    scheduleSzpiegTimers(code, game.durationSec);
+  });
+
+  // Gracz oskarża (Panic Button): wybiera cel, gra się zamraża.
+  socket.on("szpieg-accuse", ({ code, playerId, targetId }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const r = mod && mod.accuse ? mod.accuse(game, playerId, targetId) : null;
+    if (!r) return;
+    clearSzpiegTimers(code);
+    io.to(code).emit("szpieg-panic-started", r);
+  });
+
+  // Głos w oskarżeniu (TAK/NIE).
+  socket.on("szpieg-panic-vote", ({ code, playerId, agree }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const r = mod && mod.votePanic ? mod.votePanic(game, playerId, agree) : null;
+    if (!r) return;
+    io.to(code).emit("szpieg-panic-progress", r);
+    // Rozstrzygamy, gdy wszyscy uprawnieni zagłosowali.
+    if (r.votedCount >= r.total) {
+      resolveSzpiegPanic(code);
+    }
+  });
+
+  // Strzał Życia — Szpieg zgaduje lokalizację (pudło = natychmiastowa porażka).
+  socket.on("szpieg-shot", ({ code, playerId, locationId }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const r = mod && mod.shot ? mod.shot(game, playerId, locationId) : null;
+    if (!r) return;
+    clearSzpiegTimers(code);
+    io.to(code).emit("szpieg-result", r);
+    io.to(code).emit("szpieg-reveal", mod.reveal(game));
+    io.to(code).emit("scores-update", { scores: engine.getScores(code) });
+  });
+
+  // Host ujawnia rozwiązanie (bez punktów).
+  socket.on("szpieg-reveal", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    io.to(code).emit("szpieg-reveal", mod.reveal(game));
+  });
+
+  // Werdykt hosta po końcu timera (spyWon = true/false).
+  socket.on("szpieg-resolve", ({ code, spyWon }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const r = mod && mod.resolveHost ? mod.resolveHost(game, !!spyWon) : null;
+    if (!r) return;
+    clearSzpiegTimers(code);
+    io.to(code).emit("szpieg-result", r);
+    io.to(code).emit("szpieg-reveal", mod.reveal(game));
+    io.to(code).emit("scores-update", { scores: engine.getScores(code) });
+  });
+
+  // Nowa runda (ponowne rozdanie, punkty zostają).
+  socket.on("szpieg-next-round", ({ code }) => {
+    const game = engine.getGame(code);
+    if (!game || game.hostId !== socket.id) return;
+    const mod = getModule(game);
+    const r = mod && mod.nextRound ? mod.nextRound(game) : null;
+    if (!r) return;
+    io.to(code).emit("szpieg-next-round");
+    emitSzpiegRoles(code);
+    io.to(code).emit("szpieg-started", mod.getHostState(game));
+  });
+
   socket.on("rejoin-game", ({ code, playerId }) => {
     const game = engine.getGame(code);
     if (!game) {
@@ -898,6 +1038,10 @@ io.on("connection", (socket) => {
     socket.data.gameCode = code;
     socket.data.playerId = playerId;
     socket.emit("rejoin-success", { player, gameType: game.gameType });
+    // Odtwórz listę graczy (potrzebna m.in. do wyboru celu oskarżenia w grze Szpieg).
+    socket.emit("player-joined", {
+      players: game.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar })),
+    });
 
     const mod = getModule(game);
 
@@ -960,6 +1104,33 @@ io.on("connection", (socket) => {
         word: game.currentWord.word,
         taboo: game.currentWord.taboo || [],
       });
+    }
+
+    // Szpieg — odtwórz tajną rolę gracza oraz stan timera / oskarżenia / rozwiązania.
+    if (game.gameType === "szpieg" && mod) {
+      const role = mod.getPlayerRole ? mod.getPlayerRole(game, playerId) : null;
+      if (role) socket.emit("szpieg-role", role);
+      if (game.revealed) {
+        socket.emit("szpieg-reveal", mod.reveal(game));
+      } else if (game.paused && game.remainingMs != null) {
+        socket.emit("szpieg-timer-started", {
+          startedAt: Date.now() - (game.durationSec * 1000 - game.remainingMs),
+          durationSec: game.durationSec,
+        });
+      } else if (game.timerStartedAt) {
+        socket.emit("szpieg-timer-started", {
+          startedAt: game.timerStartedAt,
+          durationSec: game.durationSec,
+        });
+      }
+      if (game.panic) {
+        socket.emit("szpieg-panic-started", {
+          accusedId: game.panic.accusedId,
+          accusedName: game.panic.accusedName,
+          initiatorId: game.panic.initiatorId,
+          remainingMs: game.remainingMs,
+        });
+      }
     }
 
     // If game is in finale, notify

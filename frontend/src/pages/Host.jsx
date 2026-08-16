@@ -3,11 +3,13 @@ import { useSocket } from "../context/SocketContext";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
 import Scoreboard from "../components/Scoreboard";
+import SpyRules from "../components/SpyRules";
 import { LEVELS, ROUND_OPTIONS, VOTE_OPTIONS } from "../data/truthOrDare";
 import VideoOverlay from "../components/VideoOverlay";
 import { LOADING_VIDEOS, randomOf } from "../videos";
 import "../styles/theme.css";
 import "../styles/host.css";
+import "../styles/spy.css";
 
 const MAX_PLAYERS = 8;
 const BUZZER_TIME = 20;
@@ -27,6 +29,7 @@ const GAME_META = {
   melodia: { name: "Melodia czy Fałsz", emoji: "🎧", desc: "Zgadnij utwór po tekście" },
   haslo: { name: "Zgadnij Hasło", emoji: "🔤", desc: "Opisz hasło, grupa zgaduje" },
   karaoke: { name: "Karaoke Challenge", emoji: "🎤", desc: "Zaśpiewaj, publiczność ocenia" },
+  szpieg: { name: "Szpieg", emoji: "🕵️", desc: "Blef i dedukcja — kto jest Szpiegiem?" },
 };
 
 // Formatowanie kwot (np. 1 000 000 zł)
@@ -143,6 +146,17 @@ export default function Host() {
   const [hasloWord, setHasloWord] = useState(null);
   const [hasloResult, setHasloResult] = useState(null);
 
+  // --- Szpieg ---
+  const [szpiegDuration, setSzpiegDuration] = useState(300);
+  const [szpiegHostState, setSzpiegHostState] = useState(null);
+  const [szpiegTimer, setSzpiegTimer] = useState(null); // { startedAt, durationSec }
+  const [szpiegNow, setSzpiegNow] = useState(0);
+  const [szpiegTimeUp, setSzpiegTimeUp] = useState(false);
+  const [szpiegHeartbeat, setSzpiegHeartbeat] = useState(false);
+  const [szpiegResult, setSzpiegResult] = useState(null);
+  const [szpiegReveal, setSzpiegReveal] = useState(null);
+  const [showSpyRules, setShowSpyRules] = useState(false);
+
   const roundRef = useRef(round);
   roundRef.current = round;
   const googleVoiceRef = useRef(null);
@@ -201,6 +215,19 @@ export default function Host() {
     const id = setInterval(tick, 200);
     return () => clearInterval(id);
   }, [flipState && flipState.timerStartedAt]);
+
+  // Licznik czasu rundy Szpieg (tick do odświeżania odliczania)
+  useEffect(() => {
+    const startedAt = szpiegTimer && szpiegTimer.startedAt;
+    if (!startedAt) {
+      setSzpiegNow(0);
+      return;
+    }
+    const tick = () => setSzpiegNow(Date.now());
+    tick();
+    const id = setInterval(tick, 200);
+    return () => clearInterval(id);
+  }, [szpiegTimer && szpiegTimer.startedAt]);
 
   // Load Google Polish voice (best quality on Chrome)
   useEffect(() => {
@@ -479,6 +506,36 @@ export default function Host() {
       setHasloWord(null);
     });
 
+    // --- Szpieg ---
+    socket.on("szpieg-started", (s) => {
+      setSzpiegHostState(s);
+      setSzpiegTimer(null);
+      setSzpiegTimeUp(false);
+      setSzpiegHeartbeat(false);
+      setSzpiegResult(null);
+      setSzpiegReveal(null);
+      setGameStatus("round");
+    });
+    socket.on("szpieg-timer-started", ({ startedAt, durationSec }) => {
+      setSzpiegTimer({ startedAt, durationSec });
+      setSzpiegTimeUp(false);
+    });
+    socket.on("szpieg-heartbeat", () => setSzpiegHeartbeat(true));
+    socket.on("szpieg-time-up", () => setSzpiegTimeUp(true));
+    socket.on("szpieg-result", (r) => {
+      setSzpiegResult(r);
+      setSzpiegTimer(null);
+      setSzpiegHeartbeat(false);
+    });
+    socket.on("szpieg-reveal", (r) => setSzpiegReveal(r));
+    socket.on("szpieg-next-round", () => {
+      setSzpiegResult(null);
+      setSzpiegReveal(null);
+      setSzpiegTimeUp(false);
+      setSzpiegHeartbeat(false);
+      setSzpiegTimer(null);
+    });
+
     return () => {
       socket.off("game-created");
       socket.off("player-joined");
@@ -522,6 +579,13 @@ export default function Host() {
       socket.off("flip-round-won");
       socket.off("haslo-word");
       socket.off("haslo-result");
+      socket.off("szpieg-started");
+      socket.off("szpieg-timer-started");
+      socket.off("szpieg-heartbeat");
+      socket.off("szpieg-time-up");
+      socket.off("szpieg-result");
+      socket.off("szpieg-reveal");
+      socket.off("szpieg-next-round");
     };
   }, [socket]);
 
@@ -534,6 +598,8 @@ export default function Host() {
       });
     } else if (isQuizGame(gameType)) {
       socket.emit("start-game", { code: gameCode, difficulty });
+    } else if (gameType === "szpieg") {
+      socket.emit("start-game", { code: gameCode, duration: szpiegDuration });
     } else {
       socket.emit("start-game", { code: gameCode });
     }
@@ -622,6 +688,19 @@ export default function Host() {
   };
   const hasloGuessed = () => socket.emit("haslo-guessed", { code: gameCode });
   const hasloSkip = () => socket.emit("haslo-skip", { code: gameCode });
+
+  // --- Szpieg ---
+  const szpiegStartTimer = () =>
+    socket.emit("szpieg-start-timer", { code: gameCode });
+  const szpiegResolve = (spyWon) =>
+    socket.emit("szpieg-resolve", { code: gameCode, spyWon });
+  const szpiegNextRound = () => {
+    setSzpiegResult(null);
+    setSzpiegReveal(null);
+    setSzpiegTimeUp(false);
+    setSzpiegHeartbeat(false);
+    socket.emit("szpieg-next-round", { code: gameCode });
+  };
 
   const nextQuestion = () => {
     socket.emit("next-question", { code: gameCode });
@@ -788,6 +867,28 @@ export default function Host() {
             </div>
           )}
 
+          {gameType === "szpieg" && (
+            <div className="settings-panel fade-in">
+              <h3>Ustawienia gry</h3>
+              <div className="settings-group">
+                <label>Czas rundy (na końcu — synchroniczne bicie serca):</label>
+                <div className="level-grid">
+                  {[180, 240, 300, 360, 480].map((s) => (
+                    <button
+                      key={s}
+                      className={`level-chip ${
+                        szpiegDuration === s ? "selected" : ""
+                      }`}
+                      onClick={() => setSzpiegDuration(s)}
+                    >
+                      {Math.floor(s / 60)} min
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {gameType === "quiz" && preselected && (
             <p
               style={{
@@ -902,11 +1003,14 @@ export default function Host() {
           <button
             className="btn btn-start"
             onClick={startGame}
-            disabled={players.length < 2}
+            disabled={
+              gameType === "szpieg" ? players.length < 3 : players.length < 2
+            }
           >
             Rozpocznij grę
           </button>
-          {players.length < 2 && (
+          {((gameType === "szpieg" && players.length < 3) ||
+            (gameType !== "szpieg" && players.length < 2)) && (
             <p
               style={{
                 textAlign: "center",
@@ -914,7 +1018,7 @@ export default function Host() {
                 marginTop: "10px",
               }}
             >
-              Potrzeba minimum 2 graczy
+              Potrzeba minimum {gameType === "szpieg" ? 3 : 2} graczy
             </p>
           )}
         </>
@@ -1575,6 +1679,197 @@ export default function Host() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* SZPIEG — ROZGRYWKA */}
+      {gameType === "szpieg" && gameStatus === "round" && (
+        <div
+          className="spy-game fade-in"
+          style={{ maxWidth: "720px", margin: "0 auto" }}
+        >
+          <Scoreboard scores={scores} showLives={false} />
+
+          {!szpiegReveal && szpiegHostState && (
+            <div
+              className="spy-dossier"
+              style={{ marginTop: "20px", textAlign: "center" }}
+            >
+              <span className="spy-stamp">🔒 TAJNE</span>
+              <div style={{ marginTop: "14px" }}>
+                <div className="spy-location-emoji">
+                  {szpiegHostState.locationEmoji}
+                </div>
+                <div className="spy-location-name">
+                  {szpiegHostState.location}
+                </div>
+              </div>
+              <p
+                style={{
+                  fontFamily: "var(--spy-type)",
+                  color: "#444",
+                  marginTop: "10px",
+                }}
+              >
+                Runda {szpiegHostState.roundNumber} · {szpiegHostState.playersCount}{" "}
+                graczy
+              </p>
+            </div>
+          )}
+
+          {!szpiegReveal && szpiegHostState && (
+            <div style={{ textAlign: "center", marginTop: "20px" }}>
+              {!szpiegTimer && !szpiegTimeUp && !szpiegResult && (
+                <>
+                  <p
+                    style={{
+                      color: "var(--text-secondary)",
+                      marginBottom: "14px",
+                    }}
+                  >
+                    Role rozdane. Gracze oglądają swoje karty — potem wystartuj
+                    stoper.
+                  </p>
+                  <button className="btn btn-start" onClick={szpiegStartTimer}>
+                    ▶ Start timera (
+                    {Math.floor(szpiegHostState.durationSec / 60)} min)
+                  </button>
+                </>
+              )}
+
+              {szpiegTimer && (
+                <div style={{ marginTop: "6px" }}>
+                  <p className={`spy-timer ${szpiegHeartbeat ? "urgent" : ""}`}>
+                    {formatTime(
+                      Math.max(
+                        0,
+                        szpiegTimer.durationSec * 1000 -
+                          (szpiegNow - szpiegTimer.startedAt)
+                      )
+                    )}
+                  </p>
+                  {szpiegHeartbeat && (
+                    <p
+                      style={{
+                        color: "var(--red-wrong)",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      💓 Ostatnie sekundy!
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {szpiegTimeUp && !szpiegResult && (
+                <div
+                  className="vote-result-panel fade-in"
+                  style={{ marginTop: "16px" }}
+                >
+                  <p className="vote-result-title">⏰ Czas minął!</p>
+                  <p style={{ color: "var(--text-secondary)", marginTop: "6px" }}>
+                    Ustalcie werdykt — czy Szpieg odgadł lokalizację?
+                  </p>
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      display: "flex",
+                      gap: "12px",
+                      justifyContent: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <button
+                      className="btn btn-start"
+                      onClick={() => szpiegResolve(true)}
+                    >
+                      🕵️ Szpieg odgadł lokalizację
+                    </button>
+                    <button
+                      className="btn btn-elimination"
+                      onClick={() => szpiegResolve(false)}
+                    >
+                      🔍 Agenci złapali Szpiega
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(szpiegResult || szpiegReveal) && (
+            <div className="spy-reveal" style={{ marginTop: "20px" }}>
+              {szpiegResult && (
+                <p
+                  style={{
+                    color: "#fff",
+                    fontWeight: 900,
+                    fontSize: "1.3rem",
+                    textAlign: "center",
+                  }}
+                >
+                  {szpiegResult.title}
+                </p>
+              )}
+              {szpiegReveal && (
+                <>
+                  <p
+                    style={{
+                      textAlign: "center",
+                      marginTop: "10px",
+                      color: "#e5e7eb",
+                    }}
+                  >
+                    📍 {szpiegReveal.locationEmoji} {szpiegReveal.location}
+                  </p>
+                  <p
+                    style={{
+                      textAlign: "center",
+                      marginTop: "4px",
+                      color: "#fff",
+                    }}
+                  >
+                    🕵️ Szpieg: <strong>{szpiegReveal.spyName}</strong>
+                  </p>
+                  <div style={{ marginTop: "10px" }}>
+                    {szpiegReveal.roles.map((r) => (
+                      <div
+                        key={r.playerId}
+                        className={`role-row ${r.isSpy ? "spy" : ""}`}
+                      >
+                        <span>{r.emoji}</span>
+                        <span style={{ flex: 1 }}>{r.playerName}</span>
+                        <span>{r.isSpy ? "SZPIEG" : r.role}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div style={{ textAlign: "center", marginTop: "16px" }}>
+                <button className="btn btn-next" onClick={szpiegNextRound}>
+                  🔄 Następna runda
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: "20px", textAlign: "center" }}>
+            <button
+              className="btn btn-next"
+              style={{
+                background: "transparent",
+                borderColor: "var(--border-color)",
+              }}
+              onClick={() => setShowSpyRules((v) => !v)}
+            >
+              {showSpyRules ? "Ukryj zasady" : "📜 Zasady i punktacja"}
+            </button>
+            {showSpyRules && (
+              <div style={{ marginTop: "14px", textAlign: "left" }}>
+                <SpyRules />
+              </div>
+            )}
+          </div>
         </div>
       )}
 

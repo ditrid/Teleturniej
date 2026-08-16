@@ -3,9 +3,12 @@ import { useSocket } from "../context/SocketContext";
 import { useSearchParams } from "react-router-dom";
 import { VOTE_OPTIONS } from "../data/truthOrDare";
 import VideoOverlay from "../components/VideoOverlay";
+import SpyRules from "../components/SpyRules";
+import useHeartbeat from "../hooks/useHeartbeat";
 import { ELIMINATION_VIDEOS, LOADING_VIDEOS, WIN_VIDEO, randomOf } from "../videos";
 import "../styles/theme.css";
 import "../styles/player.css";
+import "../styles/spy.css";
 
 const AVATARS = ["🦊", "🐸", "🐱", "🐶", "🦄", "🐼", "🐨", "🦁"];
 const BUZZER_TIME = 20;
@@ -124,6 +127,25 @@ export default function Join() {
   // --- Zgadnij Hasło ---
   const [hasloWord, setHasloWord] = useState(null);
 
+  // --- Szpieg ---
+  const [szpiegRole, setSzpiegRole] = useState(null);
+  const [szpiegTimer, setSzpiegTimer] = useState(null); // { startedAt, durationSec }
+  const [szpiegNow, setSzpiegNow] = useState(0);
+  const [szpiegTimeUp, setSzpiegTimeUp] = useState(false);
+  const [szpiegHeartbeat, setSzpiegHeartbeat] = useState(false);
+  const [szpiegPanic, setSzpiegPanic] = useState(null);
+  const [szpiegVoted, setSzpiegVoted] = useState(null);
+  const [szpiegPanicProgress, setSzpiegPanicProgress] = useState(null);
+  const [szpiegResult, setSzpiegResult] = useState(null);
+  const [szpiegReveal, setSzpiegReveal] = useState(null);
+  const [showAccuse, setShowAccuse] = useState(false);
+  const [showShotPicker, setShowShotPicker] = useState(false);
+  const [shotLocationId, setShotLocationId] = useState(null);
+  const [shotSearch, setShotSearch] = useState("");
+  const [showSpyRules, setShowSpyRules] = useState(false);
+
+  const heartbeat = useHeartbeat();
+
   // Refs to avoid dependency issues in useEffect
   const playerIdRef = useRef(playerId);
   playerIdRef.current = playerId;
@@ -172,6 +194,30 @@ export default function Join() {
     const id = setInterval(tick, 200);
     return () => clearInterval(id);
   }, [flipState && flipState.timerStartedAt]);
+
+  // Odliczanie rundy Szpieg (tick do odświeżania pozostałego czasu).
+  useEffect(() => {
+    const startedAt = szpiegTimer && szpiegTimer.startedAt;
+    if (!startedAt) {
+      setSzpiegNow(0);
+      return;
+    }
+    const tick = () => setSzpiegNow(Date.now());
+    tick();
+    const id = setInterval(tick, 200);
+    return () => clearInterval(id);
+  }, [szpiegTimer && szpiegTimer.startedAt]);
+
+  // Bicie serca — uruchamiane synchronicznie zdarzeniem z serwera.
+  useEffect(() => {
+    if (szpiegHeartbeat && !szpiegTimeUp && !szpiegResult && !szpiegReveal) {
+      heartbeat.start();
+    } else {
+      heartbeat.stop();
+    }
+    // heartbeat.start / heartbeat.stop to stabilne referencje (useCallback).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [szpiegHeartbeat, szpiegTimeUp, szpiegResult, szpiegReveal, heartbeat.start, heartbeat.stop]);
 
   // Track socket connection status
   useEffect(() => {
@@ -437,6 +483,57 @@ export default function Join() {
     socket.on("haslo-word", (w) => setHasloWord(w));
     socket.on("haslo-result", () => setHasloWord(null));
 
+    // --- Szpieg ---
+    socket.on("szpieg-role", (r) => {
+      setSzpiegRole(r);
+      setSzpiegReveal(null);
+      setSzpiegResult(null);
+      setSzpiegTimeUp(false);
+      setSzpiegHeartbeat(false);
+      setSzpiegPanic(null);
+      setSzpiegVoted(null);
+      setShowAccuse(false);
+      setShowShotPicker(false);
+      setShotLocationId(null);
+      setShotSearch("");
+    });
+    socket.on("szpieg-timer-started", ({ startedAt, durationSec }) => {
+      setSzpiegTimer({ startedAt, durationSec });
+      setSzpiegTimeUp(false);
+    });
+    socket.on("szpieg-heartbeat", () => setSzpiegHeartbeat(true));
+    socket.on("szpieg-time-up", () => {
+      setSzpiegTimeUp(true);
+      setSzpiegHeartbeat(false);
+    });
+    socket.on("szpieg-panic-started", (p) => {
+      setSzpiegPanic(p);
+      setSzpiegVoted(null);
+    });
+    socket.on("szpieg-panic-progress", (p) => setSzpiegPanicProgress(p));
+    socket.on("szpieg-result", (r) => {
+      setSzpiegResult(r);
+      setSzpiegTimer(null);
+      setSzpiegHeartbeat(false);
+    });
+    socket.on("szpieg-reveal", (r) => {
+      setSzpiegReveal(r);
+      setSzpiegHeartbeat(false);
+    });
+    socket.on("szpieg-next-round", () => {
+      setSzpiegReveal(null);
+      setSzpiegResult(null);
+      setSzpiegTimeUp(false);
+      setSzpiegHeartbeat(false);
+      setSzpiegPanic(null);
+      setSzpiegVoted(null);
+      setSzpiegTimer(null);
+      setShowAccuse(false);
+      setShowShotPicker(false);
+      setShotLocationId(null);
+      setShotSearch("");
+    });
+
     // Nowy kod z URL ma priorytet nad auto-rejoinem — gracz świadomie chce
     // dołączyć do innej gry (np. zeskanował nowy QR). Czyścimy stare dane,
     // żeby nie blokowały dołączenia do nowej gry.
@@ -498,6 +595,15 @@ export default function Join() {
       socket.off("flip-round-won");
       socket.off("haslo-word");
       socket.off("haslo-result");
+      socket.off("szpieg-role");
+      socket.off("szpieg-timer-started");
+      socket.off("szpieg-heartbeat");
+      socket.off("szpieg-time-up");
+      socket.off("szpieg-panic-started");
+      socket.off("szpieg-panic-progress");
+      socket.off("szpieg-result");
+      socket.off("szpieg-reveal");
+      socket.off("szpieg-next-round");
     };
   }, [socket]); // Stable – only re-registers when socket changes
 
@@ -710,6 +816,33 @@ export default function Join() {
     socket.emit("milionerzy-friend", {
       code: gameCodeRef.current,
       playerId: playerIdRef.current,
+    });
+  };
+
+  // --- Szpieg ---
+  const szpiegAccuse = (targetId) => {
+    socket.emit("szpieg-accuse", {
+      code: gameCodeRef.current,
+      playerId: playerIdRef.current,
+      targetId,
+    });
+  };
+
+  const szpiegVote = (agree) => {
+    if (szpiegVoted !== null) return;
+    setSzpiegVoted(agree);
+    socket.emit("szpieg-panic-vote", {
+      code: gameCodeRef.current,
+      playerId: playerIdRef.current,
+      agree,
+    });
+  };
+
+  const szpiegShot = (locationId) => {
+    socket.emit("szpieg-shot", {
+      code: gameCodeRef.current,
+      playerId: playerIdRef.current,
+      locationId,
     });
   };
 
@@ -1406,6 +1539,347 @@ export default function Join() {
               </>
             );
           })()}
+        </div>
+      )}
+
+      {/* PLAYING (szpieg) */}
+      {step === "playing" && gameType === "szpieg" && !gameOverData && (
+        <div className="game-section">
+          <div className="my-score-bar">
+            Moje punkty: <strong>{myScorePoints}</strong>
+          </div>
+
+          {/* Karta Szpiega */}
+          {!szpiegReveal && szpiegRole && !szpiegPanic && szpiegRole.isSpy && (
+            <div
+              className="spy-dossier"
+              style={{ textAlign: "center", marginTop: "8px" }}
+            >
+              <span className="spy-stamp small">ŚCIŚLE TAJNE</span>
+              <div style={{ marginTop: "16px" }} className="spy-role-emoji">
+                🕵️
+              </div>
+              <div
+                className="spy-location-name"
+                style={{ fontSize: "1.6rem" }}
+              >
+                JESTEŚ SZPIEGIEM
+              </div>
+              <p
+                style={{
+                  fontFamily: "var(--spy-type)",
+                  color: "#333",
+                  marginTop: "10px",
+                }}
+              >
+                Nie znasz lokalizacji. Udawaj, że wiesz, o czym mowa, i
+                wydedukuj, gdzie jesteście.
+              </p>
+              <div className="spy-redacted" style={{ marginTop: "10px" }}>
+                lokalizacja utajniona
+              </div>
+
+              <div style={{ marginTop: "18px" }}>
+                <button
+                  className="spy-btn spy-btn-shot"
+                  onClick={() => setShowShotPicker((v) => !v)}
+                >
+                  •••
+                </button>
+                {showShotPicker && (
+                  <div style={{ marginTop: "12px", textAlign: "left" }}>
+                    <div className="spy-warning">
+                      ⚠️ Strzał Życia jest ostateczny — pudło natychmiast
+                      kończy grę i przegrywasz rundę.
+                    </div>
+                    <input
+                      className="spy-search"
+                      type="text"
+                      placeholder="Szukaj lokalizacji…"
+                      value={shotSearch}
+                      onChange={(e) => setShotSearch(e.target.value)}
+                      style={{ marginTop: "10px" }}
+                    />
+                    <div className="spy-loc-grid">
+                      {szpiegRole.locations
+                        .filter((l) =>
+                          l.name
+                            .toLowerCase()
+                            .includes(shotSearch.toLowerCase())
+                        )
+                        .map((l) => (
+                          <button
+                            key={l.id}
+                            className="spy-loc-btn"
+                            onClick={() => setShotLocationId(l)}
+                          >
+                            {l.emoji} {l.name}
+                          </button>
+                        ))}
+                    </div>
+                    {shotLocationId && (
+                      <div style={{ marginTop: "10px" }}>
+                        <p
+                          style={{
+                            fontFamily: "var(--spy-type)",
+                            color: "#333",
+                          }}
+                        >
+                          Strzelasz w: {shotLocationId.emoji}{" "}
+                          {shotLocationId.name}?
+                        </p>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            className="spy-btn spy-btn-panic"
+                            onClick={() => szpiegShot(shotLocationId.id)}
+                          >
+                            🎯 Strzelam
+                          </button>
+                          <button
+                            className="spy-btn"
+                            onClick={() => setShotLocationId(null)}
+                          >
+                            Anuluj
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Karta Agenta */}
+          {!szpiegReveal && szpiegRole && !szpiegPanic && !szpiegRole.isSpy && (
+            <div
+              className="spy-dossier"
+              style={{ textAlign: "center", marginTop: "8px" }}
+            >
+              <span className="spy-stamp small">TAJNE</span>
+              <div style={{ marginTop: "16px" }}>
+                <div className="spy-location-emoji">
+                  {szpiegRole.locationEmoji}
+                </div>
+                <div className="spy-location-name">{szpiegRole.location}</div>
+              </div>
+              <p className="spy-role-label" style={{ marginTop: "6px" }}>
+                {szpiegRole.emoji} {szpiegRole.role}
+              </p>
+              <p
+                style={{
+                  fontFamily: "var(--spy-type)",
+                  color: "#444",
+                  marginTop: "8px",
+                }}
+              >
+                Jesteś agentem. Namierz Szpiega.
+              </p>
+            </div>
+          )}
+
+          {/* Timer */}
+          {!szpiegReveal && szpiegTimer && !szpiegPanic && (
+            <div style={{ textAlign: "center", marginTop: "16px" }}>
+              <p className={`spy-timer ${szpiegHeartbeat ? "urgent" : ""}`}>
+                {formatTime(
+                  Math.max(
+                    0,
+                    szpiegTimer.durationSec * 1000 -
+                      (szpiegNow - szpiegTimer.startedAt)
+                  )
+                )}
+              </p>
+              {szpiegHeartbeat && (
+                <p style={{ color: "var(--red-wrong)", fontWeight: "bold" }}>
+                  💓 Ostatnie sekundy!
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Czas minął */}
+          {szpiegTimeUp && !szpiegResult && !szpiegReveal && (
+            <div style={{ textAlign: "center", marginTop: "12px" }}>
+              <p
+                style={{
+                  color: "var(--accent-gold)",
+                  fontWeight: "bold",
+                  fontSize: "1.25rem",
+                }}
+              >
+                ⏰ Czas minął!
+              </p>
+              <p style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
+                Ustalcie werdykt — prowadzący ogłosi wynik.
+              </p>
+            </div>
+          )}
+
+          {/* Przycisk oskarżenia */}
+          {!szpiegReveal && szpiegRole && !szpiegPanic && (
+            <div className="spy-actions">
+              <button
+                className="spy-btn spy-btn-panic"
+                onClick={() => setShowAccuse(true)}
+              >
+                🆘 Wskaż Szpiega
+              </button>
+              {showAccuse && (
+                <div style={{ marginTop: "8px" }}>
+                  <p
+                    style={{
+                      color: "var(--text-secondary)",
+                      textAlign: "center",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Kogo podejrzewasz? (oskarżenie zamraża grę)
+                  </p>
+                  {players
+                    .filter((p) => p.id !== playerId)
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        className="choice-card"
+                        onClick={() => {
+                          setShowAccuse(false);
+                          szpiegAccuse(p.id);
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  <button
+                    className="skip-button"
+                    onClick={() => setShowAccuse(false)}
+                  >
+                    Anuluj
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Głosowanie w oskarżeniu */}
+          {szpiegPanic && !szpiegReveal && !szpiegResult && (
+            <div className="choice-section fade-in" style={{ marginTop: "16px" }}>
+              <h3>🎯 Czy {szpiegPanic.accusedName} to Szpieg?</h3>
+              {szpiegPanic.accusedId === playerId ? (
+                <div className="waiting-section">
+                  <p className="waiting-title">
+                    Jesteś oskarżony — nie głosujesz.
+                  </p>
+                  <p className="waiting-dots">•••</p>
+                </div>
+              ) : szpiegVoted === null ? (
+                <div className="spy-vote-btns">
+                  <button
+                    className="spy-btn spy-vote-yes"
+                    onClick={() => szpiegVote(true)}
+                  >
+                    ✅ TAK
+                  </button>
+                  <button
+                    className="spy-btn spy-vote-no"
+                    onClick={() => szpiegVote(false)}
+                  >
+                    ❌ NIE
+                  </button>
+                </div>
+              ) : (
+                <div className="waiting-section">
+                  <p className="waiting-title">Zagłosowano. Czekam na wynik…</p>
+                  {szpiegPanicProgress && (
+                    <p
+                      style={{
+                        color: "var(--text-secondary)",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      {szpiegPanicProgress.votedCount} /{" "}
+                      {szpiegPanicProgress.total}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Rozwiązanie rundy */}
+          {(szpiegResult || szpiegReveal) && (
+            <div className="spy-reveal" style={{ marginTop: "16px" }}>
+              {szpiegResult && (
+                <p
+                  style={{
+                    color: "#fff",
+                    fontWeight: 900,
+                    fontSize: "1.2rem",
+                    textAlign: "center",
+                  }}
+                >
+                  {szpiegResult.title}
+                </p>
+              )}
+              {szpiegReveal && (
+                <>
+                  <p
+                    style={{
+                      textAlign: "center",
+                      marginTop: "8px",
+                      color: "#e5e7eb",
+                    }}
+                  >
+                    📍 {szpiegReveal.locationEmoji} {szpiegReveal.location}
+                  </p>
+                  <p style={{ textAlign: "center", color: "#fff" }}>
+                    🕵️ Szpieg: <strong>{szpiegReveal.spyName}</strong>
+                  </p>
+                  <div style={{ marginTop: "10px" }}>
+                    {szpiegReveal.roles.map((r) => (
+                      <div
+                        key={r.playerId}
+                        className={`role-row ${r.isSpy ? "spy" : ""}`}
+                      >
+                        <span>{r.emoji}</span>
+                        <span style={{ flex: 1 }}>{r.playerName}</span>
+                        <span>{r.isSpy ? "SZPIEG" : r.role}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              <p
+                style={{
+                  textAlign: "center",
+                  marginTop: "10px",
+                  color: "var(--text-secondary)",
+                  fontSize: "0.9rem",
+                }}
+              >
+                Czekaj na kolejną rundę…
+              </p>
+            </div>
+          )}
+
+          {/* Zasady */}
+          <div style={{ marginTop: "18px", textAlign: "center" }}>
+            <button
+              className="btn btn-next"
+              style={{
+                background: "transparent",
+                borderColor: "var(--border-color)",
+              }}
+              onClick={() => setShowSpyRules((v) => !v)}
+            >
+              {showSpyRules ? "Ukryj zasady" : "📜 Zasady i punktacja"}
+            </button>
+            {showSpyRules && (
+              <div style={{ marginTop: "12px", textAlign: "left" }}>
+                <SpyRules />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
