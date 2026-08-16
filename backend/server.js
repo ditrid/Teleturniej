@@ -948,7 +948,18 @@ io.on("connection", (socket) => {
     const r = mod && mod.startTimer ? mod.startTimer(game) : null;
     if (!r) return;
     io.to(code).emit("szpieg-timer-started", r);
+    io.to(code).emit("szpieg-turn", mod.getTurnState(game));
     scheduleSzpiegTimers(code, game.durationSec);
+  });
+
+  // Gracz wybiera, kogo pyta (przejście tury).
+  socket.on("szpieg-turn-pick", ({ code, playerId, targetId }) => {
+    const game = engine.getGame(code);
+    if (!game) return;
+    const mod = getModule(game);
+    const r = mod && mod.pickTarget ? mod.pickTarget(game, playerId, targetId) : null;
+    if (!r) return;
+    io.to(code).emit("szpieg-turn", r);
   });
 
   // Gracz oskarża (Panic Button): wybiera cel, gra się zamraża.
@@ -1122,6 +1133,9 @@ io.on("connection", (socket) => {
           startedAt: game.timerStartedAt,
           durationSec: game.durationSec,
         });
+      }
+      if (game.askerId) {
+        socket.emit("szpieg-turn", mod.getTurnState(game));
       }
       if (game.panic) {
         socket.emit("szpieg-panic-started", {

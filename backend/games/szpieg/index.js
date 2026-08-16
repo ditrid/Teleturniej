@@ -37,6 +37,8 @@ module.exports = {
       panic: null, // { accusedId, accusedName, initiatorId, votes: { playerId -> bool } }
       revealed: false,
       roundNumber: 0,
+      askerId: null, // kto aktualnie pyta
+      answererId: null, // kto odpowiada (null = pytający jeszcze nie wybrał)
     };
   },
 
@@ -81,6 +83,8 @@ module.exports = {
     game.paused = false;
     game.panic = null;
     game.revealed = false;
+    game.askerId = null;
+    game.answererId = null;
     game.roundNumber += 1;
   },
 
@@ -125,7 +129,44 @@ module.exports = {
     game.timerStartedAt = Date.now();
     game.paused = false;
     game.remainingMs = null;
+    this.initTurn(game);
     return { startedAt: game.timerStartedAt, durationSec: game.durationSec };
+  },
+
+  // Losuje pierwszego pytającego i czyści cel (początek tury).
+  initTurn(game) {
+    if (!game.players || game.players.length === 0) return null;
+    const first = game.players[Math.floor(Math.random() * game.players.length)];
+    game.askerId = first.id;
+    game.answererId = null;
+    return this.getTurnState(game);
+  },
+
+  // Stan tury: kto pyta, a kto odpowiada.
+  getTurnState(game) {
+    const asker = game.players.find((p) => p.id === game.askerId);
+    const answerer = game.players.find((p) => p.id === game.answererId);
+    return {
+      askerId: game.askerId,
+      askerName: asker ? asker.name : "",
+      answererId: game.answererId,
+      answererName: answerer ? answerer.name : "",
+    };
+  },
+
+  // Przejście tury: aktywny gracz wybiera, kogo pyta dalej.
+  pickTarget(game, playerId, targetId) {
+    if (game.revealed || game.panic) return null;
+    if (!game.askerId || playerId === targetId) return null;
+    const activeId = game.answererId || game.askerId;
+    if (playerId !== activeId) return null;
+    const target = game.players.find((p) => p.id === targetId);
+    if (!target) return null;
+    if (game.answererId) {
+      game.askerId = game.answererId; // odpowiadający staje się pytającym
+    }
+    game.answererId = targetId;
+    return this.getTurnState(game);
   },
 
   pauseTimer(game) {

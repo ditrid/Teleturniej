@@ -155,6 +155,7 @@ export default function Host() {
   const [szpiegHeartbeat, setSzpiegHeartbeat] = useState(false);
   const [szpiegResult, setSzpiegResult] = useState(null);
   const [szpiegReveal, setSzpiegReveal] = useState(null);
+  const [szpiegTurn, setSzpiegTurn] = useState(null); // { askerId, askerName, answererId, answererName }
   const [showSpyRules, setShowSpyRules] = useState(false);
 
   const roundRef = useRef(round);
@@ -514,6 +515,7 @@ export default function Host() {
       setSzpiegHeartbeat(false);
       setSzpiegResult(null);
       setSzpiegReveal(null);
+      setSzpiegTurn(null);
       setGameStatus("round");
     });
     socket.on("szpieg-timer-started", ({ startedAt, durationSec }) => {
@@ -528,12 +530,14 @@ export default function Host() {
       setSzpiegHeartbeat(false);
     });
     socket.on("szpieg-reveal", (r) => setSzpiegReveal(r));
+    socket.on("szpieg-turn", (t) => setSzpiegTurn(t));
     socket.on("szpieg-next-round", () => {
       setSzpiegResult(null);
       setSzpiegReveal(null);
       setSzpiegTimeUp(false);
       setSzpiegHeartbeat(false);
       setSzpiegTimer(null);
+      setSzpiegTurn(null);
     });
 
     return () => {
@@ -586,6 +590,7 @@ export default function Host() {
       socket.off("szpieg-result");
       socket.off("szpieg-reveal");
       socket.off("szpieg-next-round");
+      socket.off("szpieg-turn");
     };
   }, [socket]);
 
@@ -1717,6 +1722,33 @@ export default function Host() {
               >
                 Lokalizacja ukryta — znają ją agenci na swoich telefonach.
               </p>
+            </div>
+          )}
+
+          {/* Wskaźnik tury */}
+          {!szpiegReveal && szpiegTurn && !szpiegResult && (
+            <div
+              style={{
+                textAlign: "center",
+                marginTop: "16px",
+                fontFamily: "var(--spy-type)",
+              }}
+            >
+              {szpiegTurn.answererId ? (
+                <p style={{ color: "var(--text-secondary)", fontSize: "1.1rem" }}>
+                  🔍 <strong style={{ color: "#fff" }}>{szpiegTurn.askerName}</strong>{" "}
+                  pyta ➜{" "}
+                  <strong style={{ color: "var(--accent-gold-light)" }}>
+                    {szpiegTurn.answererName}
+                  </strong>{" "}
+                  odpowiada
+                </p>
+              ) : (
+                <p style={{ color: "var(--text-secondary)", fontSize: "1.1rem" }}>
+                  🔍 <strong style={{ color: "#fff" }}>{szpiegTurn.askerName}</strong>{" "}
+                  wybiera, kogo zapytać…
+                </p>
+              )}
             </div>
           )}
 

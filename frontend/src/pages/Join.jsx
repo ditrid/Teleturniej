@@ -138,6 +138,7 @@ export default function Join() {
   const [szpiegPanicProgress, setSzpiegPanicProgress] = useState(null);
   const [szpiegResult, setSzpiegResult] = useState(null);
   const [szpiegReveal, setSzpiegReveal] = useState(null);
+  const [szpiegTurn, setSzpiegTurn] = useState(null); // { askerId, askerName, answererId, answererName }
   const [showAccuse, setShowAccuse] = useState(false);
   const [showShotPicker, setShowShotPicker] = useState(false);
   const [shotLocationId, setShotLocationId] = useState(null);
@@ -492,6 +493,7 @@ export default function Join() {
       setSzpiegHeartbeat(false);
       setSzpiegPanic(null);
       setSzpiegVoted(null);
+      setSzpiegTurn(null);
       setShowAccuse(false);
       setShowShotPicker(false);
       setShotLocationId(null);
@@ -520,6 +522,7 @@ export default function Join() {
       setSzpiegReveal(r);
       setSzpiegHeartbeat(false);
     });
+    socket.on("szpieg-turn", (t) => setSzpiegTurn(t));
     socket.on("szpieg-next-round", () => {
       setSzpiegReveal(null);
       setSzpiegResult(null);
@@ -527,6 +530,7 @@ export default function Join() {
       setSzpiegHeartbeat(false);
       setSzpiegPanic(null);
       setSzpiegVoted(null);
+      setSzpiegTurn(null);
       setSzpiegTimer(null);
       setShowAccuse(false);
       setShowShotPicker(false);
@@ -604,6 +608,7 @@ export default function Join() {
       socket.off("szpieg-result");
       socket.off("szpieg-reveal");
       socket.off("szpieg-next-round");
+      socket.off("szpieg-turn");
     };
   }, [socket]); // Stable – only re-registers when socket changes
 
@@ -843,6 +848,14 @@ export default function Join() {
       code: gameCodeRef.current,
       playerId: playerIdRef.current,
       locationId,
+    });
+  };
+
+  const szpiegPickTarget = (targetId) => {
+    socket.emit("szpieg-turn-pick", {
+      code: gameCodeRef.current,
+      playerId: playerIdRef.current,
+      targetId,
     });
   };
 
@@ -1549,6 +1562,128 @@ export default function Join() {
             Moje punkty: <strong>{myScorePoints}</strong>
           </div>
 
+          {/* Timer — na górze, zawsze widoczny */}
+          {!szpiegReveal && szpiegTimer && (
+            <div style={{ textAlign: "center", marginTop: "12px" }}>
+              <p className={`spy-timer ${szpiegHeartbeat ? "urgent" : ""}`}>
+                {formatTime(
+                  Math.max(
+                    0,
+                    szpiegTimer.durationSec * 1000 -
+                      (szpiegNow - szpiegTimer.startedAt)
+                  )
+                )}
+              </p>
+              {szpiegPanic ? (
+                <p
+                  style={{
+                    color: "var(--accent-gold-light)",
+                    fontWeight: "bold",
+                  }}
+                >
+                  ⏸ Zamrożono (głosowanie)
+                </p>
+              ) : szpiegHeartbeat ? (
+                <p style={{ color: "var(--red-wrong)", fontWeight: "bold" }}>
+                  💓 Ostatnie sekundy!
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          {/* Czas minął */}
+          {szpiegTimeUp && !szpiegResult && !szpiegReveal && (
+            <div style={{ textAlign: "center", marginTop: "12px" }}>
+              <p
+                style={{
+                  color: "var(--accent-gold)",
+                  fontWeight: "bold",
+                  fontSize: "1.25rem",
+                }}
+              >
+                ⏰ Czas minął!
+              </p>
+              <p style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
+                Ustalcie werdykt — prowadzący ogłosi wynik.
+              </p>
+            </div>
+          )}
+
+          {/* Wskaźnik tury: kto pyta ➜ kto odpowiada */}
+          {!szpiegReveal && !szpiegPanic && !szpiegResult && szpiegTurn && (
+            <div
+              style={{
+                textAlign: "center",
+                marginTop: "12px",
+                fontFamily: "var(--spy-type)",
+              }}
+            >
+              {szpiegTurn.answererId ? (
+                <p style={{ color: "var(--text-secondary)", fontSize: "1rem" }}>
+                  🔍 <strong style={{ color: "#fff" }}>{szpiegTurn.askerName}</strong>{" "}
+                  pyta ➜{" "}
+                  <strong style={{ color: "var(--accent-gold-light)" }}>
+                    {szpiegTurn.answererName}
+                  </strong>{" "}
+                  odpowiada
+                </p>
+              ) : (
+                <p style={{ color: "var(--text-secondary)", fontSize: "1rem" }}>
+                  🔍 <strong style={{ color: "#fff" }}>{szpiegTurn.askerName}</strong>{" "}
+                  wybiera, kogo zapytać…
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Picker tury (dla aktywnego gracza) */}
+          {!szpiegReveal &&
+            !szpiegPanic &&
+            !szpiegResult &&
+            szpiegTurn &&
+            (() => {
+              const isAsker =
+                szpiegTurn.askerId === playerId && !szpiegTurn.answererId;
+              const isAnswerer = szpiegTurn.answererId === playerId;
+              if (!isAsker && !isAnswerer) return null;
+              return (
+                <div style={{ marginTop: "10px" }}>
+                  <p
+                    style={{
+                      color: "var(--accent-gold-light)",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                      fontFamily: "var(--spy-type)",
+                    }}
+                  >
+                    {isAsker
+                      ? "Twoja kolej — wybierz, kogo pytasz:"
+                      : `Odpowiadasz ${szpiegTurn.askerName}. Po odpowiedzi wybierz, kogo pytasz dalej:`}
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                      marginTop: "8px",
+                    }}
+                  >
+                    {players
+                      .filter((p) => p.id !== playerId)
+                      .map((p) => (
+                        <button
+                          key={p.id}
+                          className="spy-btn"
+                          onClick={() => szpiegPickTarget(p.id)}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              );
+            })()}
+
           {/* Karta Szpiega */}
           {!szpiegReveal && szpiegRole && !szpiegPanic && szpiegRole.isSpy && (
             <div
@@ -1674,44 +1809,6 @@ export default function Join() {
                 }}
               >
                 Jesteś agentem. Namierz Szpiega.
-              </p>
-            </div>
-          )}
-
-          {/* Timer */}
-          {!szpiegReveal && szpiegTimer && !szpiegPanic && (
-            <div style={{ textAlign: "center", marginTop: "16px" }}>
-              <p className={`spy-timer ${szpiegHeartbeat ? "urgent" : ""}`}>
-                {formatTime(
-                  Math.max(
-                    0,
-                    szpiegTimer.durationSec * 1000 -
-                      (szpiegNow - szpiegTimer.startedAt)
-                  )
-                )}
-              </p>
-              {szpiegHeartbeat && (
-                <p style={{ color: "var(--red-wrong)", fontWeight: "bold" }}>
-                  💓 Ostatnie sekundy!
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Czas minął */}
-          {szpiegTimeUp && !szpiegResult && !szpiegReveal && (
-            <div style={{ textAlign: "center", marginTop: "12px" }}>
-              <p
-                style={{
-                  color: "var(--accent-gold)",
-                  fontWeight: "bold",
-                  fontSize: "1.25rem",
-                }}
-              >
-                ⏰ Czas minął!
-              </p>
-              <p style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
-                Ustalcie werdykt — prowadzący ogłosi wynik.
               </p>
             </div>
           )}
