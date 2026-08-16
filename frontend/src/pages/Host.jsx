@@ -1696,23 +1696,26 @@ export default function Host() {
               style={{ marginTop: "20px", textAlign: "center" }}
             >
               <span className="spy-stamp">🔒 TAJNE</span>
-              <div style={{ marginTop: "14px" }}>
-                <div className="spy-location-emoji">
-                  {szpiegHostState.locationEmoji}
-                </div>
-                <div className="spy-location-name">
-                  {szpiegHostState.location}
-                </div>
-              </div>
               <p
                 style={{
                   fontFamily: "var(--spy-type)",
-                  color: "#444",
-                  marginTop: "10px",
+                  color: "#333",
+                  marginTop: "14px",
+                  fontSize: "1.15rem",
+                  fontWeight: 700,
                 }}
               >
                 Runda {szpiegHostState.roundNumber} · {szpiegHostState.playersCount}{" "}
                 graczy
+              </p>
+              <p
+                style={{
+                  fontFamily: "var(--spy-type)",
+                  color: "#666",
+                  marginTop: "8px",
+                }}
+              >
+                Lokalizacja ukryta — znają ją agenci na swoich telefonach.
               </p>
             </div>
           )}
@@ -1857,8 +1860,9 @@ export default function Host() {
             <button
               className="btn btn-next"
               style={{
-                background: "transparent",
-                borderColor: "var(--border-color)",
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid var(--border-color)",
+                color: "var(--accent-gold-light)",
               }}
               onClick={() => setShowSpyRules((v) => !v)}
             >

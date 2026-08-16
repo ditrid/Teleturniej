@@ -1867,8 +1867,9 @@ export default function Join() {
             <button
               className="btn btn-next"
               style={{
-                background: "transparent",
-                borderColor: "var(--border-color)",
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid var(--border-color)",
+                color: "var(--accent-gold-light)",
               }}
               onClick={() => setShowSpyRules((v) => !v)}
             >
