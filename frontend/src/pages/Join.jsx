@@ -1716,10 +1716,10 @@ export default function Join() {
 
               <div style={{ marginTop: "18px" }}>
                 <button
-                  className="spy-btn spy-btn-shot"
+                  className="spy-btn"
                   onClick={() => setShowShotPicker((v) => !v)}
                 >
-                  •••
+                  🎯 Wskaż lokalizację
                 </button>
                 {showShotPicker && (
                   <div style={{ marginTop: "12px", textAlign: "left" }}>
@@ -1814,7 +1814,7 @@ export default function Join() {
           )}
 
           {/* Przycisk oskarżenia */}
-          {!szpiegReveal && szpiegRole && !szpiegPanic && (
+          {!szpiegReveal && szpiegRole && !szpiegPanic && !szpiegRole.isSpy && (
             <div className="spy-actions">
               <button
                 className="spy-btn spy-btn-panic"

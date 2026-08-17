@@ -189,6 +189,7 @@ module.exports = {
   // --- Szybkie Oskarżenie (Panic Button) ---
   accuse(game, playerId, targetId) {
     if (game.panic || game.revealed || !game.timerStartedAt) return null;
+    if (playerId === game.spyId) return null; // Szpieg nie może oskarżać
     if (playerId === targetId) return null;
     const target = game.players.find((p) => p.id === targetId);
     if (!target) return null;

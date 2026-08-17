@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSocket } from "../context/SocketContext";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
+import logoUrl from "/images/kwakout_logo_napis.png";
 import Scoreboard from "../components/Scoreboard";
 import SpyRules from "../components/SpyRules";
 import { LEVELS, ROUND_OPTIONS, VOTE_OPTIONS } from "../data/truthOrDare";
@@ -735,7 +736,11 @@ export default function Host() {
   return (
     <div className="host-container">
       <div className="host-header">
-        <h1 className="host-title">TELETURNIEJ</h1>
+        <img
+          src={logoUrl}
+          alt="KwakOut"
+          style={{ height: "70px", display: "block", margin: "0 auto 10px" }}
+        />
         <p className="host-subtitle">Panel Prowadzącego</p>
       </div>
 

@@ -51,7 +51,7 @@ export default function GameDetail() {
         <div
           className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-night-850 animate-rise sm:aspect-[16/10]"
           style={{
-            borderColor: game.borderColor ? `${game.borderColor}40` : undefined,
+            borderColor: game.theme?.accent ? `${game.theme.accent}40` : undefined,
           }}
         >
           {game.image ? (
@@ -63,7 +63,7 @@ export default function GameDetail() {
           ) : (
             <>
               <div
-                className={`absolute inset-0 bg-gradient-to-br ${game.gradient}`}
+                className={`absolute inset-0 bg-gradient-to-br ${game.theme?.gradient || "from-slate-700 to-slate-900"}`}
               />
               <div
                 aria-hidden
@@ -97,11 +97,9 @@ export default function GameDetail() {
             {game.description}
           </p>
 
-          <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-7 grid max-w-sm grid-cols-2 gap-3">
             <InfoTile icon="👥" label="Gracze" value={game.players} />
             <InfoTile icon="🎯" label="Trudność" value={game.difficulty} />
-            <InfoTile icon="⭐" label="Ocena" value={game.rating} />
-            <InfoTile icon="▶️" label="Rozgrywki" value={game.plays} />
           </div>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -120,6 +118,14 @@ export default function GameDetail() {
           </div>
         </div>
       </div>
+
+      {/* Opis gry */}
+      <section className="mt-10 rounded-3xl border border-white/10 bg-night-850 p-6 sm:p-8">
+        <h2 className="font-display text-xl font-bold text-white">Opis gry</h2>
+        <p className="mt-3 max-w-3xl text-base leading-relaxed text-slate-300">
+          {game.longDescription || game.description}
+        </p>
+      </section>
     </div>
   );
 }
