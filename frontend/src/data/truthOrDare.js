@@ -19,3 +19,24 @@ export const VOTE_OPTIONS = [
 export function voteOptionByKey(key) {
   return VOTE_OPTIONS.find((o) => o.key === key) || null;
 }
+
+
+// Skala oceny odpowiedzi gry "Szaleństwo pytań" (1–5 pkt).
+export const SZALENSTWO_VOTE_OPTIONS = [
+  { key: "nuda", emoji: "😴", label: "Nuda", points: 1, desc: "Zbyt grzecznie, poprawnie i bez polotu.", reaction: "cisza" },
+  { key: "suchar", emoji: "🙂", label: "Suchar", points: 2, desc: "Przeciętny żart, bezpieczna klasyka.", reaction: "uśmiech z grzeczności" },
+  { key: "spryt", emoji: "🧠", label: "Spryt", points: 3, desc: "Inteligentna, błyskotliwa riposta.", reaction: "głośny śmiech" },
+  { key: "bezczelnosc", emoji: "😈", label: "Bezczelność", points: 4, desc: "Ostry tekst po bandzie, brak wstydu.", reaction: "„Ooo, grubo!”" },
+  { key: "wyrok", emoji: "💀", label: "Wyrok", points: 5, desc: "Totalny hit, przekroczenie wszelkich granic.", reaction: "płacz ze śmiechu" },
+];
+
+// Poziomy pytań gry "Szaleństwo pytań".
+export const SZALENSTWO_LEVELS = [
+  { id: "lagodne", label: "Łagodne", emoji: "🟢" },
+  { id: "ostre", label: "Ostre 18+", emoji: "🔞" },
+];
+
+// Opcje oceny zależne od gry (szaleństwo ma własną skalę 1–5).
+export function getVoteOptions(gameType) {
+  return gameType === "szalenstwo" ? SZALENSTWO_VOTE_OPTIONS : VOTE_OPTIONS;
+}

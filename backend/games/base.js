@@ -48,7 +48,7 @@ const VOTE_OPTIONS = {
 };
 
 // Fabryka gier imprezowych opartych o turę: host pokazuje kartę → gracz wykonuje → grupa głosuje.
-// Używana przez "Szaleństwo Pytania", "Król Imprezy" i "Filmowy Kwak".
+// Używana przez "Szaleństwo pytań", "Król Imprezy" i "Filmowy Kwak".
 function makePromptGame(config) {
   const {
     id,
@@ -59,6 +59,9 @@ function makePromptGame(config) {
     promptType, // string zapisywany jako prompt.type
     maxPlayers = 8,
     defaults = {},
+    voteOptions = VOTE_OPTIONS,
+    levels = null, // opcjonalne poziomy kart (np. ["lagodne", "ostre"])
+    defaultLevel = null,
   } = config;
 
   return {
@@ -75,6 +78,7 @@ function makePromptGame(config) {
         roundsLeft: defaults.roundsTotal || 2,
         turnOrder: [],
         currentTurnIndex: 0,
+        level: defaultLevel,
         currentPrompt: null,
         votingActive: false,
         currentVotes: {},
@@ -91,6 +95,11 @@ function makePromptGame(config) {
       game.roundsLeft = rounds;
       game.turnOrder = game.players.map((p) => p.id);
       game.currentTurnIndex = 0;
+      if (levels) {
+        game.level = levels.includes(settings.level)
+          ? settings.level
+          : defaultLevel || levels[0];
+      }
       game.currentPrompt = null;
       game.votingActive = false;
       game.currentVotes = {};
@@ -117,11 +126,15 @@ function makePromptGame(config) {
       const currentId = game.turnOrder[game.currentTurnIndex];
       const player = game.players.find((p) => p.id === currentId);
       if (!player) return null;
-      const p = pickPrompt(game, promptPool, "usedPrompts");
+      const pool = levels
+        ? promptPool.filter((p) => (p.level || defaultLevel) === game.level)
+        : promptPool;
+      const p = pickPrompt(game, pool, "usedPrompts");
+      const level = p.level || game.level || "grzeczne";
       game.currentPrompt = {
         type: promptType,
         text: p.text,
-        level: p.level || "grzeczne",
+        level,
         playerId: currentId,
         playerName: player.name,
       };
@@ -132,7 +145,7 @@ function makePromptGame(config) {
         playerName: player.name,
         type: promptType,
         text: p.text,
-        level: p.level || "grzeczne",
+        level,
       };
     },
 
@@ -175,7 +188,7 @@ function makePromptGame(config) {
         (id) => id !== game.currentPrompt.playerId
       );
       if (!voters.includes(playerId)) return null;
-      if (!VOTE_OPTIONS[option]) return null;
+      if (!voteOptions[option]) return null;
       game.currentVotes[playerId] = option;
       const allVoted = voters.every((id) => game.currentVotes[id]);
       return {
@@ -190,7 +203,7 @@ function makePromptGame(config) {
       const prompt = game.currentPrompt;
       const voters = game.turnOrder.filter((id) => id !== prompt.playerId);
       const votes = voters.map((id) => game.currentVotes[id]).filter(Boolean);
-      const pointsList = votes.map((o) => VOTE_OPTIONS[o].points);
+      const pointsList = votes.map((o) => voteOptions[o].points);
       const avg = pointsList.length
         ? Math.round(pointsList.reduce((a, b) => a + b, 0) / pointsList.length)
         : 0;
@@ -198,7 +211,10 @@ function makePromptGame(config) {
       const player = game.players.find((p) => p.id === prompt.playerId);
       if (player) player.score += avg;
 
-      const breakdown = { mistrzowskie: 0, wykonane: 0, ledwo: 0, nie: 0 };
+      const breakdown = {};
+      Object.keys(voteOptions).forEach((k) => {
+        breakdown[k] = 0;
+      });
       votes.forEach((o) => {
         breakdown[o] += 1;
       });

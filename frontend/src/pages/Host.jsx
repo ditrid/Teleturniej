@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import logoUrl from "/images/kwakout_logo_napis.png";
 import Scoreboard from "../components/Scoreboard";
 import SpyRules from "../components/SpyRules";
-import { LEVELS, ROUND_OPTIONS, VOTE_OPTIONS } from "../data/truthOrDare";
+import { LEVELS, ROUND_OPTIONS, SZALENSTWO_LEVELS, getVoteOptions } from "../data/truthOrDare";
 import VideoOverlay from "../components/VideoOverlay";
 import { LOADING_VIDEOS, randomOf } from "../videos";
 import "../styles/theme.css";
@@ -23,7 +23,7 @@ const GAME_META = {
   "kto-bardziej": { name: "Kto Bardziej?", emoji: "🕺", desc: "Głosowanie na gracza" },
   memy: { name: "Memy Rządzą", emoji: "🤣", desc: "Podpisy pod memy" },
   milionerzy: { name: "Milionerzy Party", emoji: "💰", desc: "Drabinka ze stawkami" },
-  szalenstwo: { name: "Szaleństwo Pytania", emoji: "🍻", desc: "Szalone pytania" },
+  szalenstwo: { name: "Szaleństwo pytań", emoji: "🍻", desc: "Szalone pytania" },
   krol: { name: "Król Imprezy", emoji: "👑", desc: "Wyzwania na turę" },
   filmowy: { name: "Filmowy Kwak", emoji: "🎬", desc: "Filmowe scenki" },
   "flip-cup": { name: "Flip Cup Challenge", emoji: "🥤", desc: "Asystent gry fizycznej" },
@@ -57,7 +57,7 @@ const isRapidQuiz = (t) => ["quiz-rapid", "melodia"].includes(t);
 const PROMPT_BADGES = {
   truth: { emoji: "🟣", label: "PRAWDA", className: "truth" },
   dare: { emoji: "🔥", label: "WYZWANIE", className: "dare" },
-  szalenstwo: { emoji: "🍻", label: "SZALEŃSTWO PYTANIA", className: "truth" },
+  szalenstwo: { emoji: "🍻", label: "SZALEŃSTWO PYTAŃ", className: "truth" },
   krol: { emoji: "👑", label: "KRÓL IMPREZY", className: "dare" },
   filmowy: { emoji: "🎬", label: "FILMOWY KWAK", className: "truth" },
   karaoke: { emoji: "🎤", label: "KARAOKE", className: "dare" },
@@ -105,6 +105,7 @@ export default function Host() {
   const [gameType, setGameType] = useState(searchParams.get("game") || "quiz");
   const [prawdaLevel, setPrawdaLevel] = useState("grzeczne");
   const [prawdaRounds, setPrawdaRounds] = useState(2);
+  const [szalenstwoLevel, setSzalenstwoLevel] = useState("lagodne");
   const [difficulty, setDifficulty] = useState("mieszany");
   const [turnInfo, setTurnInfo] = useState(null);
   const [prompt, setPrompt] = useState(null);
@@ -606,6 +607,8 @@ export default function Host() {
       socket.emit("start-game", { code: gameCode, difficulty });
     } else if (gameType === "szpieg") {
       socket.emit("start-game", { code: gameCode, duration: szpiegDuration });
+    } else if (gameType === "szalenstwo") {
+      socket.emit("start-game", { code: gameCode, level: szalenstwoLevel });
     } else {
       socket.emit("start-game", { code: gameCode });
     }
@@ -855,6 +858,26 @@ export default function Host() {
             </div>
           )}
 
+          {gameType === "szalenstwo" && (
+            <div className="settings-panel fade-in">
+              <h3>Ustawienia gry</h3>
+              <div className="settings-group">
+                <label>Poziom pytań:</label>
+                <div className="level-grid">
+                  {SZALENSTWO_LEVELS.map((l) => (
+                    <button
+                      key={l.id}
+                      className={`level-chip ${szalenstwoLevel === l.id ? "selected" : ""}`}
+                      onClick={() => setSzalenstwoLevel(l.id)}
+                    >
+                      {l.emoji} {l.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {isQuizGame(gameType) && (
             <div className="settings-panel fade-in">
               <h3>Ustawienia gry</h3>
@@ -996,6 +1019,19 @@ export default function Host() {
             </p>
           )}
 
+          {gameType === "szalenstwo" && (
+            <p
+              style={{
+                textAlign: "center",
+                color: "var(--text-secondary)",
+                fontSize: "0.9rem",
+                marginTop: "10px",
+              }}
+            >
+              🍻 Poziom: {SZALENSTWO_LEVELS.find((l) => l.id === szalenstwoLevel)?.label}
+            </p>
+          )}
+
           {isQuizGame(gameType) && (
             <p
               style={{
@@ -1117,7 +1153,7 @@ export default function Host() {
                 {voteResult.playerName} zdobywa {voteResult.pointsAwarded} pkt
               </p>
               <div className="vote-breakdown">
-                {VOTE_OPTIONS.map((o) => {
+                {getVoteOptions(gameType).map((o) => {
                   const count = voteResult.breakdown[o.key] || 0;
                   if (count === 0) return null;
                   return (

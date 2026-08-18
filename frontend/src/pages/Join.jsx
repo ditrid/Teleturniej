@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSocket } from "../context/SocketContext";
 import { useSearchParams } from "react-router-dom";
-import { VOTE_OPTIONS } from "../data/truthOrDare";
+import { getVoteOptions } from "../data/truthOrDare";
 import VideoOverlay from "../components/VideoOverlay";
 import SpyRules from "../components/SpyRules";
 import useHeartbeat from "../hooks/useHeartbeat";
@@ -37,7 +37,7 @@ const isRapidQuiz = (t) => ["quiz-rapid", "melodia"].includes(t);
 const PROMPT_BADGES = {
   truth: { emoji: "🟣", label: "PRAWDA", className: "truth" },
   dare: { emoji: "🔥", label: "WYZWANIE", className: "dare" },
-  szalenstwo: { emoji: "🍻", label: "SZALEŃSTWO PYTANIA", className: "truth" },
+  szalenstwo: { emoji: "🍻", label: "SZALEŃSTWO PYTAŃ", className: "truth" },
   krol: { emoji: "👑", label: "KRÓL IMPREZY", className: "dare" },
   filmowy: { emoji: "🎬", label: "FILMOWY KWAK", className: "truth" },
   karaoke: { emoji: "🎤", label: "KARAOKE", className: "dare" },
@@ -2134,14 +2134,20 @@ export default function Join() {
             !voteResult && (
               <div className="vote-section fade-in">
                 <h3>Oceń {voteRequest.playerName}:</h3>
-                {VOTE_OPTIONS.map((o) => (
+                {getVoteOptions(gameType).map((o) => (
                   <button
                     key={o.key}
                     className="vote-button"
                     onClick={() => submitVote(o.key)}
                   >
-                    {o.emoji} {o.label}{" "}
-                    <span className="vote-points">+{o.points}</span>
+                    <span>
+                      {o.emoji} {o.label}{" "}
+                      <span className="vote-points">+{o.points}</span>
+                    </span>
+                    {o.desc && <span className="vote-desc">{o.desc}</span>}
+                    {o.reaction && (
+                      <span className="vote-desc">Reakcja: {o.reaction}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -2172,7 +2178,7 @@ export default function Join() {
                   : `${voteResult.playerName}: +${voteResult.pointsAwarded} pkt`}
               </p>
               <div className="vote-breakdown">
-                {VOTE_OPTIONS.map((o) => {
+                {getVoteOptions(gameType).map((o) => {
                   const count = voteResult.breakdown[o.key] || 0;
                   if (count === 0) return null;
                   return (

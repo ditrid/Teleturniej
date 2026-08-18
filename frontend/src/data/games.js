@@ -7,7 +7,7 @@ import cat4 from "/images/kategorie/4.png";
 import cat5 from "/images/kategorie/5.png";
 import cat6 from "/images/kategorie/6.png";
 import ktoBardziej from "/images/gry/kto_bardziej.png";
-import szalonePytania from "/images/gry/szalone_pytania.png";
+import szalenstwoPytan from "/images/gry/szalenstwo_pytan.png";
 import flipCup from "/images/gry/flip_cup.png";
 import nigdyPrzenigdy from "/images/gry/nigdy_przenigdy.png";
 import krolImprezy from "/images/gry/krol_imprezy.png";
@@ -91,9 +91,9 @@ export const games = [
   },
   {
     id: 102,
-    title: "SZALEŃSTWO\nPYTANIA",
+    title: "SZALEŃSTWO\nPYTAŃ",
     gameType: "szalenstwo",
-    image: szalonePytania,
+    image: szalenstwoPytan,
     categoryId: "alkoholowe",
     categoryName: "Alkoholowe",
     categoryIcon: "🍾",
