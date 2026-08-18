@@ -71,6 +71,7 @@ function makePromptGame(config) {
     description,
     maxPlayers,
     defaults,
+    voteOptions,
 
     initState() {
       return {
@@ -179,6 +180,7 @@ function makePromptGame(config) {
         playerName: game.currentPrompt.playerName,
         voterCount: voters.length,
         voters,
+        voteOptions: Object.values(voteOptions),
       };
     },
 
@@ -233,6 +235,7 @@ function makePromptGame(config) {
         totalVotes: votes.length,
         voterCount: voters.length,
         breakdown,
+        voteOptions: Object.values(voteOptions),
         gameOver: advanced.gameOver,
         winner: advanced.winner,
         next: advanced.next,

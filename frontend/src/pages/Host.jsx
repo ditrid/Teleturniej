@@ -6,6 +6,7 @@ import logoUrl from "/images/kwakout_logo_napis.png";
 import Scoreboard from "../components/Scoreboard";
 import SpyRules from "../components/SpyRules";
 import { LEVELS, ROUND_OPTIONS, SZALENSTWO_LEVELS, getVoteOptions } from "../data/truthOrDare";
+import SzalenstwoRules from "../components/SzalenstwoRules";
 import VideoOverlay from "../components/VideoOverlay";
 import { LOADING_VIDEOS, randomOf } from "../videos";
 import "../styles/theme.css";
@@ -159,6 +160,7 @@ export default function Host() {
   const [szpiegReveal, setSzpiegReveal] = useState(null);
   const [szpiegTurn, setSzpiegTurn] = useState(null); // { askerId, askerName, answererId, answererName }
   const [showSpyRules, setShowSpyRules] = useState(false);
+  const [showSzalenstwoRules, setShowSzalenstwoRules] = useState(false);
 
   const roundRef = useRef(round);
   roundRef.current = round;
@@ -1032,6 +1034,27 @@ export default function Host() {
             </p>
           )}
 
+          {gameType === "szalenstwo" && (
+            <div style={{ marginTop: "16px", textAlign: "center" }}>
+              <button
+                className="btn btn-next"
+                style={{
+                  background: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid var(--border-color)",
+                  color: "var(--accent-gold-light)",
+                }}
+                onClick={() => setShowSzalenstwoRules((v) => !v)}
+              >
+                {showSzalenstwoRules ? "Ukryj zasady" : "📜 Zasady i punktacja"}
+              </button>
+              {showSzalenstwoRules && (
+                <div style={{ marginTop: "12px", textAlign: "left" }}>
+                  <SzalenstwoRules />
+                </div>
+              )}
+            </div>
+          )}
+
           {isQuizGame(gameType) && (
             <p
               style={{
@@ -1153,7 +1176,7 @@ export default function Host() {
                 {voteResult.playerName} zdobywa {voteResult.pointsAwarded} pkt
               </p>
               <div className="vote-breakdown">
-                {getVoteOptions(gameType).map((o) => {
+                {(voteResult.voteOptions || getVoteOptions(gameType)).map((o) => {
                   const count = voteResult.breakdown[o.key] || 0;
                   if (count === 0) return null;
                   return (

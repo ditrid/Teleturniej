@@ -1083,6 +1083,7 @@ io.on("connection", (socket) => {
           playerName: game.currentPrompt.playerName,
           voterCount: voters.length,
           voters,
+          voteOptions: Object.values(mod.voteOptions || {}),
         });
       }
     }

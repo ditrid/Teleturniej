@@ -99,7 +99,7 @@ export const games = [
     categoryIcon: "🍾",
     description: "Szalone pytania, które rozkręcą każdą imprezę!",
     longDescription:
-      "Host pokazuje kartę z szalonym pytaniem, gracz odpowiada, a grupa ocenia jego odpowiedź. Sprytne i bezczelne odpowiedzi zbierają najwięcej punktów.",
+      "Host pokazuje kartę z szalonym pytaniem, a gracz odpowiada przed grupą. Reszta ocenia odpowiedź w skali 1–5: 1 pkt Nuda (cisza), 2 pkt Suchar (uśmiech z grzeczności), 3 pkt Spryt (głośny śmiech), 4 pkt Bezczelność („Ooo, grubo!”) i 5 pkt Wyrok (płacz ze śmiechu).",
     difficulty: "Średni",
     players: "2–8 graczy",
     emoji: "🍻",

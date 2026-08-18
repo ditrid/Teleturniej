@@ -54,6 +54,7 @@ module.exports = {
   description: "Karty prawdy i wyzwania + grupowe głosowanie.",
   maxPlayers: 8,
   defaults: { level: "grzeczne", roundsTotal: 2 },
+  voteOptions: VOTE_OPTIONS,
 
   initState() {
     return {
@@ -170,6 +171,7 @@ module.exports = {
       playerName: game.currentPrompt.playerName,
       voterCount: voters.length,
       voters,
+      voteOptions: Object.values(VOTE_OPTIONS),
     };
   },
 
@@ -222,6 +224,7 @@ module.exports = {
       totalVotes: votes.length,
       voterCount: voters.length,
       breakdown,
+      voteOptions: Object.values(VOTE_OPTIONS),
       gameOver: advanced.gameOver,
       winner: advanced.winner,
       next: advanced.next,

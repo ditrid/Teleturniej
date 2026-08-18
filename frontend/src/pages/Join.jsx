@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSocket } from "../context/SocketContext";
 import { useSearchParams } from "react-router-dom";
 import { getVoteOptions } from "../data/truthOrDare";
+import SzalenstwoRules from "../components/SzalenstwoRules";
 import VideoOverlay from "../components/VideoOverlay";
 import SpyRules from "../components/SpyRules";
 import useHeartbeat from "../hooks/useHeartbeat";
@@ -144,6 +145,7 @@ export default function Join() {
   const [shotLocationId, setShotLocationId] = useState(null);
   const [shotSearch, setShotSearch] = useState("");
   const [showSpyRules, setShowSpyRules] = useState(false);
+  const [showSzalenstwoRules, setShowSzalenstwoRules] = useState(false);
 
   const heartbeat = useHeartbeat();
 
@@ -2134,7 +2136,7 @@ export default function Join() {
             !voteResult && (
               <div className="vote-section fade-in">
                 <h3>Oceń {voteRequest.playerName}:</h3>
-                {getVoteOptions(gameType).map((o) => (
+                {(voteRequest.voteOptions || getVoteOptions(gameType)).map((o) => (
                   <button
                     key={o.key}
                     className="vote-button"
@@ -2178,7 +2180,7 @@ export default function Join() {
                   : `${voteResult.playerName}: +${voteResult.pointsAwarded} pkt`}
               </p>
               <div className="vote-breakdown">
-                {getVoteOptions(gameType).map((o) => {
+                {(voteResult.voteOptions || getVoteOptions(gameType)).map((o) => {
                   const count = voteResult.breakdown[o.key] || 0;
                   if (count === 0) return null;
                   return (
@@ -2188,6 +2190,27 @@ export default function Join() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {gameType === "szalenstwo" && (
+            <div style={{ marginTop: "18px", textAlign: "center" }}>
+              <button
+                className="btn btn-next"
+                style={{
+                  background: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid var(--border-color)",
+                  color: "var(--accent-gold-light)",
+                }}
+                onClick={() => setShowSzalenstwoRules((v) => !v)}
+              >
+                {showSzalenstwoRules ? "Ukryj zasady" : "📜 Zasady i punktacja"}
+              </button>
+              {showSzalenstwoRules && (
+                <div style={{ marginTop: "12px", textAlign: "left" }}>
+                  <SzalenstwoRules />
+                </div>
+              )}
             </div>
           )}
         </div>
